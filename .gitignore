@@ -1,0 +1,27 @@
+# ROS 2 generated directories
+build/
+install/
+log/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.log
+*.tmp
+
