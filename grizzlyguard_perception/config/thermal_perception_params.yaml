@@ -1,0 +1,65 @@
+# Parameters for grizzlyguard_perception/thermal_perception_node.
+#
+# This node is a colour-segmentation PLACEHOLDER for a real thermal camera:
+# red/orange/yellow pixels in the RGB camera are treated as "warm". The HSV
+# thresholds below default to a fairly wide, saturated red/orange/yellow
+# range that should catch typical warm-coloured Gazebo materials; tune them
+# to match whatever colour you use for the bear model / heat-signature prop
+# in your world.
+#
+# HSV ranges use OpenCV's 8-bit convention: H in [0, 179], S and V in
+# [0, 255].
+
+thermal_perception_node:
+  ros__parameters:
+    image_topic: /parrot1/camera/image
+    publish_pseudo_thermal: true
+    log_throttle_seconds: 2.0
+
+    # Minimum contour area (in pixels^2) to be considered a candidate warm
+    # region; anything smaller is treated as noise.
+    min_contour_area: 400.0
+
+    # Minimum fraction of "warm" pixels required inside the candidate
+    # bounding box for a detection to be accepted.
+    confidence_threshold: 0.35
+
+    # Morphological opening (removes speckle noise) then closing (fills
+    # small holes) applied to the warm mask, using an NxN elliptical kernel.
+    morph_kernel_size: 5
+    morph_open_iterations: 1
+    morph_close_iterations: 2
+
+    # Red wraps around hue 0/179 in OpenCV's HSV space, so it needs a low
+    # band and a high band.
+    red_low:
+      h_min: 0
+      h_max: 10
+      s_min: 90
+      s_max: 255
+      v_min: 90
+      v_max: 255
+
+    red_high:
+      h_min: 170
+      h_max: 179
+      s_min: 90
+      s_max: 255
+      v_min: 90
+      v_max: 255
+
+    orange:
+      h_min: 11
+      h_max: 25
+      s_min: 90
+      s_max: 255
+      v_min: 90
+      v_max: 255
+
+    yellow:
+      h_min: 26
+      h_max: 35
+      s_min: 90
+      s_max: 255
+      v_min: 90
+      v_max: 255
