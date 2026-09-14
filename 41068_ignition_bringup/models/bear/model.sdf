@@ -1,0 +1,33 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <!-- Black bear, 1.6 m nose-to-tail. Replaces the flat bear_billboard, whose
+       collision was a 1.23 x 1.5 x 0.05 m slab that 2D lidar misses edge-on.
+       Mesh long axis is +Y (the raw glTF was Y-up; the converter baked
+       (x,y,z)->(x,-z,y)), so rotate with a yaw in the <pose> of the <include>
+       to aim the bear. Feet already sit at z = 0.
+       Box collision, not mesh collision: cheaper, and it is the lidar return
+       that actually matters here. -->
+  <model name="bear">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <!-- Matches the scaled mesh bbox (0.67 x 1.61 x 1.02), trimmed slightly
+             past the ears/tail. The mesh is not centred in Y, hence the offset. -->
+        <pose>0 -0.18 0.51 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.67 1.55 1.0</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <uri>model://bear/meshes/bear.dae</uri>
+            <scale>0.1 0.1 0.1</scale>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
