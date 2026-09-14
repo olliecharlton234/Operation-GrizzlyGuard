@@ -264,7 +264,7 @@ def generate_launch_description():
 
     parrot_launch_arg = DeclareLaunchArgument(
         'parrot',
-        default_value='False',
+        default_value='True',
         description='Launch the Parrot drone instance in namespace /parrot1',
     )
     ld.add_action(parrot_launch_arg)
@@ -273,7 +273,7 @@ def generate_launch_description():
         'world',
         default_value='simple_trees',
         description='Which world to load',
-        choices=['simple_trees', 'large_demo'],
+        choices=['simple_trees', 'large_demo', 'yellowstone'],
     )
     ld.add_action(world_launch_arg)
 
@@ -356,9 +356,11 @@ def generate_launch_description():
         xacro_parts=['urdf_parrot', 'parrot.urdf.xacro'],
         bridge_config='gazebo_bridge_parrot1.yaml',
         localization_config='robot_localization_parrot1.yaml',
+        # Spawn directly above the bear billboard at (2.0, -2.0); the bear is
+        # 1.5 m tall, so 2.0 m clears it.
         x='2.0',
-        y='0.0',
-        z='0.8',
+        y='-2.0',
+        z='2.0',
         spawn_delay=6.0,
     )
 

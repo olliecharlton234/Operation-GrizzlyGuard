@@ -1,0 +1,34 @@
+<sdf version="1.7">
+<model name="bear_billboard">
+    <static>true</static>
+    <link name="link">
+        <!-- Rotated 90 deg about X so the plane stands upright, base resting on the ground -->
+        <pose>0 0 0.75 1.5708 0 0</pose>
+        <collision name="collision">
+            <geometry>
+                <box>
+                    <size>1.23 1.5 0.05</size>
+                </box>
+            </geometry>
+        </collision>
+        <visual name="visual">
+            <cast_shadows>false</cast_shadows>
+            <geometry>
+                <plane>
+                    <normal>0 0 1</normal>
+                    <size>1.23 1.5</size>
+                </plane>
+            </geometry>
+            <material>
+                <diffuse>1.0 1.0 1.0 1</diffuse>
+                <pbr>
+                    <metal>
+                        <albedo_map>model://bear_billboard/materials/textures/bear.png</albedo_map>
+                    </metal>
+                </pbr>
+                <double_sided>true</double_sided>
+            </material>
+        </visual>
+    </link>
+</model>
+</sdf>
