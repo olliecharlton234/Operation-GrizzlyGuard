@@ -75,6 +75,5 @@ class PatrolPath:
         pose.pose.orientation.w = 1.0
         return pose
 
-
 if __name__ == '__main__':
     main()
