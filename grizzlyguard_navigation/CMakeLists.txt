@@ -14,7 +14,7 @@ find_package(nav_msgs REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(nav2_msgs REQUIRED)
 
-add_executable(patrol_node patrolNode.cpp)
+add_executable(patrol_node src/patrolNode.cpp)
 ament_target_dependencies(patrol_node rclcpp rclcpp_action nav2_msgs geometry_msgs)
 
 install(TARGETS

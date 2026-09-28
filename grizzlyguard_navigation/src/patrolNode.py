@@ -1,3 +1,5 @@
+"""Drive the parrot around a looping PatrolPath using Nav2's waypoint follower."""
+ 
 import rclpy
 from nav2_simple_commander.robot_navigator import BasicNavigator
  
