@@ -11,9 +11,16 @@ find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(nav2_msgs REQUIRED)
 
-add_executable(patrol_path src/patrol_path.py)
-ament_target_dependencies(patrol_path rclcpp rclcpp_action nav2_msgs geometry_msgs)
+add_executable(patrol_node patrolNode.cpp)
+ament_target_dependencies(patrol_node rclcpp rclcpp_action nav2_msgs geometry_msgs)
+
+install(TARGETS
+  patrol_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
