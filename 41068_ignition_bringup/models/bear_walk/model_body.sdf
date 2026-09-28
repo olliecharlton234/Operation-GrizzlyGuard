@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <model name="bear_walk_body">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <pose>0 -0.18 0.51 0 0 0</pose>
+        <geometry><box><size>0.67 1.55 1.0</size></box></geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh><uri>model://bear_walk/meshes/body.dae</uri><scale>0.1 0.1 0.1</scale></mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
