@@ -1,0 +1,13 @@
+<?xml version="1.0" ?>
+<sdf version="1.8">
+  <model name="bear_walk_rf">
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <geometry>
+          <mesh><uri>model://bear_walk/meshes/rf.dae</uri><scale>0.1 0.1 0.1</scale></mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
