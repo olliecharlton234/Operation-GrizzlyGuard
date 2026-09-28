@@ -25,6 +25,7 @@ Two constraints drive the geometry:
     husky's 0.845 m scan plane), broken only at the bridge.
 """
 import math
+import os
 import random
 
 SEED = 41068
@@ -646,6 +647,37 @@ add('\n'.join(grove))
 # and x = +-78 at z = 2 with rpy 1.5708 0 {0, +-1.5708}.
 
 # --------------------------------------------------------------------- bears
+# ------------------------------------------------- articulated walking bear
+# Five separate models (body + four legs) cut from the same mesh by
+# scripts/split_bear.py. The bear has no skeleton, so it cannot be an SDF
+# <actor>; posing five pieces from a driver node gives real leg swing instead.
+# Emitted inline rather than as model:// includes - each piece is its own model
+# so the driver can set_pose them independently. Legs have their hip at the
+# model origin, so rotating a leg model swings it about the hip.
+WALK_BEAR = (-7.0, 4.0)
+HIPS = {'lf': (-0.181, -0.355), 'rf': (0.182, -0.352),
+        'lr': (-0.167, 0.353), 'rr': (0.168, 0.355)}
+HIP_Z = 0.42
+for _part in ('body', 'lf', 'rf', 'lr', 'rr'):
+    _hx, _hy = HIPS.get(_part, (0.0, 0.0))
+    _z = 0.0 if _part == 'body' else HIP_Z
+    _col = ("""        <collision name="collision">
+          <pose>0 -0.18 0.51 0 0 0</pose>
+          <geometry><box><size>0.67 1.55 1.0</size></box></geometry>
+        </collision>
+""" if _part == 'body' else '')
+    add(f"""    <model name="bear_walk_{_part}">
+      <static>true</static>
+      <link name="link">
+{_col}        <visual name="visual">
+          <geometry>
+            <mesh><uri>model://bear_walk/meshes/{_part}.dae</uri><scale>0.1 0.1 0.1</scale></mesh>
+          </geometry>
+        </visual>
+      </link>
+      <pose>{pose(WALK_BEAR[0] + _hx, WALK_BEAR[1] + _hy, _z)}</pose>
+    </model>""")
+
 add('    <!-- It is Yellowstone. -->')
 # Right next to the husky spawn, facing it. The nose of the mesh points -Y,
 # hence the yaw. Kept 5.4 m out so it is an obstacle to see,
@@ -656,7 +688,9 @@ add(include('model://bear', 'bear_treeline', -6.0, 84.0, yaw=-2.4))
 
 add('  </world>\n</sdf>')
 
-path = '/home/mahak/41068_ws/src/41068_ignition_bringup/worlds/yellowstone.sdf'
+# Resolve relative to this script, so it works from any checkout
+path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                    '..', 'worlds', 'yellowstone.sdf')
 with open(path, 'w') as f:
     f.write('\n'.join(out) + '\n')
 print(f'wrote {path}')
