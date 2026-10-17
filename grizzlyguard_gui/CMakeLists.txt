@@ -47,6 +47,8 @@ add_executable(BearDroneGUI
     src/dronebackend.cpp
     src/simulationworker.h
     src/simulationworker.cpp
+    src/perimeteralertdialog.cpp
+    src/perimeteralertdialog.h
 )
 
 target_link_libraries(BearDroneGUI PRIVATE Qt6::Widgets)
