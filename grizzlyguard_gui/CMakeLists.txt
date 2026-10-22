@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(bear2 LANGUAGES CXX)
+project(grizzlyguard_gui LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,6 +17,8 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets)
 # be converted to use ament_cmake + a package.xml.
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 # Gamepad/controller support uses SDL2 (Qt6 has no built-in gamepad module).
 # Install it first:
@@ -27,6 +29,7 @@ find_package(SDL2 REQUIRED)
 
 add_executable(BearDroneGUI
     src/main.cpp
+    resources.qrc
     src/mainwindow.h
     src/mainwindow.cpp
     src/cameraviewwidget.h
@@ -65,6 +68,21 @@ if(TARGET sensor_msgs::sensor_msgs)
     target_link_libraries(BearDroneGUI PRIVATE sensor_msgs::sensor_msgs)
 else()
     target_include_directories(BearDroneGUI PRIVATE ${sensor_msgs_INCLUDE_DIRS})
+endif()
+
+if(TARGET geometry_msgs::geometry_msgs)
+    target_link_libraries(BearDroneGUI PRIVATE geometry_msgs::geometry_msgs)
+else()
+    target_include_directories(BearDroneGUI PRIVATE ${geometry_msgs_INCLUDE_DIRS})
+    target_link_libraries(BearDroneGUI PRIVATE ${geometry_msgs_LIBRARIES})
+endif()
+
+# std_msgs (manual-mode flag) is linked the same way.
+if(TARGET std_msgs::std_msgs)
+    target_link_libraries(BearDroneGUI PRIVATE std_msgs::std_msgs)
+else()
+    target_include_directories(BearDroneGUI PRIVATE ${std_msgs_INCLUDE_DIRS})
+    target_link_libraries(BearDroneGUI PRIVATE ${std_msgs_LIBRARIES})
 endif()
 
 # SDL2's CMake package sometimes exposes SDL2::SDL2, sometimes only the
