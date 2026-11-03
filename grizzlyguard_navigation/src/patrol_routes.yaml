@@ -1,4 +1,4 @@
-lace.
+#lace.
 #
 # This is a PLAIN YAML file (not a ROS ros__parameters file). patrol_node.py
 # reads it with PyYAML, and you pick a route at launch:

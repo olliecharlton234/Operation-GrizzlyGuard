@@ -1,14 +1,17 @@
-"""Drive the parrot around a looping PatrolPath using Nav2's waypoint follower."""
- 
+#!/usr/bin/env python3
+"""Drive the parrot along a patrol route chosen from patrol_routes.yaml."""
+import os
+from enum import Enum
 
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from nav2_simple_commander.robot_navigator import BasicNavigator
- 
+from std_msgs.msg import Float64
+
 from patrol_path import PatrolPath
 from route_loader import load_config, map_waypoints, route_mode, route_names
 
-# this is where we will integrate with decision making, 
+PACKAGE = 'grizzlyguard_navigation'
 
 '''
 from decision making, threat zones are integrated
@@ -40,7 +43,7 @@ def main():
     navigator = BasicNavigator(namespace='parrot1')
  
     default_cfg = os.path.join(
-        get_package_share_directory('41068_ignition_bringup'), 'config', 'patrol_routes.yaml')
+        get_package_share_directory('grizzlyguard_navigation'), 'config', 'patrol_routes.yaml')
     route = navigator.declare_parameter('route', PatrolRoute.SHORT.value).value
     cfg_path = navigator.declare_parameter('routes_file', default_cfg).value
  
@@ -57,7 +60,12 @@ def main():
         f"Route '{route}' ({mode}, {len(waypoints)} waypoints): "
         f"{cfg['routes'][route].get('description', '')}")
  
-    navigator.waitUntilNav2Active()
+    # SLAM Toolbox replaces AMCL here, so don't wait for a localiser.
+    # Wait for Nav2's navigator and the waypoint follower instead.
+    navigator._waitForNodeToActivate('bt_navigator')
+    navigator.get_logger().info('Waiting for waypoint follower...')
+    navigator.follow_waypoints_client.wait_for_server()
+    navigator.get_logger().info('Nav2 ready - starting patrol.')
  
     forward = True
     while rclpy.ok():

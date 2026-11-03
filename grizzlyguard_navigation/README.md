@@ -17,4 +17,17 @@ export ROS_LOCALHOST_ONLY=1
   ros2 run grizzlyguard_navigation patrol_node --ros-args -p use_sim_time:=true
 
   
-ros2 run grizzlyguard_navigation patrol_node --ros-args -r __ns:=/parrot1 -p use_sim_time:=true
+ros2 run grizzlyguard_navigation patrol_node.py --ros-args -p route:=long_route
+
+**to run each route**
+set route to one of these options: 
+* long_route
+* medium_route
+* short_route 
+* green_zone 
+* yellow_zone 
+* orange_zone
+* red_zone 
+* emergancy_zone 
+* zone_approach
+
