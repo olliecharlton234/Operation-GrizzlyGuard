@@ -686,6 +686,79 @@ add(include('model://bear', 'bear_spawn', 4.5, 3.0, yaw=-0.983))
 add(include('model://bear', 'bear_meadow', -34.0, 150.0, yaw=1.1))
 add(include('model://bear', 'bear_treeline', -6.0, 84.0, yaw=-2.4))
 
+# ----------------------------------------------------------- hikers (not bears)
+# People walking loops around the map, so perception and the threat logic can be
+# shown NOT reacting to something that is not a bear. Gazebo plays the walk
+# animation and moves each actor along its waypoints by itself, so nothing else
+# has to drive them. A two-point loop walks there and back.
+ACTOR = 'https://fuel.gazebosim.org/1.0/mingfei/models/actor/1/files/meshes/walk.dae'
+HIKERS = {          # name: (loop, walking speed m/s)
+    'hiker': ([(7.0, -4.0), (21.0, -4.0), (21.0, -10.0), (7.0, -10.0)], 1.1),   # forest, in front of the drone spawn
+    'hiker_camp': ([(-10.0, 62.0), (10.0, 62.0), (10.0, 74.0), (-10.0, 74.0)], 0.9),   # campground clearing
+    'hiker_bridge': ([(20.0, 100.0), (20.0, 132.0)], 1.2),                         # over the bridge and back
+    'hiker_village': ([(-30.0, 208.0), (30.0, 208.0)], 1.0),                       # along the main street
+}
+HIKER_TURN = 1.0    # seconds spent turning at each corner
+HIKER_CLEAR = 1.5   # m every path must keep from tree trunks and building walls
+# Gazebo moves actors along a spline through the waypoints, not straight lines.
+# With only the corners as waypoints, the spline swings out in a loop at each
+# corner and the hiker races round it in the 1 s turn (measured up to 28 m/s).
+# A waypoint every HIKER_STEP keeps the spline on the path: peak 1.17x pace.
+HIKER_STEP = 0.5    # m between waypoints along each leg
+
+
+def hiker_waypoints(loop, speed, turn, step=HIKER_STEP):
+    """Walk each leg facing along it, turning in place at the corners."""
+    t, wps = 0.0, []
+    for i, (x0, y0) in enumerate(loop):
+        x1, y1 = loop[(i + 1) % len(loop)]
+        yaw = math.atan2(y1 - y0, x1 - x0)
+        length = math.hypot(x1 - x0, y1 - y0)
+        n = max(1, round(length / step))
+        for k in range(n):
+            wps.append((t + length / speed * k / n, x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, yaw))
+        t += length / speed
+        wps.append((t, x1, y1, yaw))
+        t += turn
+    x0, y0 = loop[0]
+    wps.append((t, x0, y0, math.atan2(loop[1][1] - y0, loop[1][0] - x0)))
+    return wps
+
+
+def hiker_clearance(loop):
+    """Closest the path comes to a tree trunk or a building wall, in metres."""
+    best = math.inf
+    for i, (x0, y0) in enumerate(loop):
+        x1, y1 = loop[(i + 1) % len(loop)]
+        n = max(1, int(math.hypot(x1 - x0, y1 - y0) / 0.5))
+        for k in range(n + 1):
+            px, py = x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n
+            for _kind, tx, ty in trees:
+                best = min(best, math.hypot(px - tx, py - ty))
+            for bx, by, bsx, bsy in FOOTPRINTS:
+                best = min(best, max(abs(px - bx) - bsx / 2, abs(py - by) - bsy / 2))
+    return best
+
+
+for _name, (_loop, _speed) in HIKERS.items():
+    _clear = hiker_clearance(_loop)
+    if _clear < HIKER_CLEAR:
+        raise SystemExit(f'{_name} walks within {_clear:.1f} m of a tree or building; move its loop')
+    add(f"""    <actor name="{_name}">
+      <skin><filename>{ACTOR}</filename><scale>1.0</scale></skin>
+      <animation name="walking">
+        <filename>{ACTOR}</filename><scale>1.0</scale><interpolate_x>true</interpolate_x>
+      </animation>
+      <script>
+        <loop>true</loop><delay_start>0</delay_start><auto_start>true</auto_start>
+        <trajectory id="0" type="walking">""")
+    for _t, _x, _y, _yaw in hiker_waypoints(_loop, _speed, HIKER_TURN):
+        add(f"          <waypoint><time>{_t:.2f}</time><pose>{pose(_x, _y, 1.0, yaw=_yaw)}</pose></waypoint>")
+    add("""        </trajectory>
+      </script>
+    </actor>""")
+    print(f'  {_name}: keeps {_clear:.1f} m clear of trees and buildings')
+
 add('  </world>\n</sdf>')
 
 # Resolve relative to this script, so it works from any checkout
