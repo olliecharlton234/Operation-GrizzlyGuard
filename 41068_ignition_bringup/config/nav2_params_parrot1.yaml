@@ -174,7 +174,7 @@ controller_server:
 local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
+      update_frequency: 4.0
       publish_frequency: 5.0
       global_frame: parrot1_odom
       robot_base_frame: parrot1_base_link
@@ -212,7 +212,7 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
-      update_frequency: 5.0
+      update_frequency: 1.0
       publish_frequency: 5.0
       global_frame: parrot1_map
       robot_base_frame: parrot1_base_link
@@ -331,7 +331,7 @@ velocity_smoother:
     scale_velocities: false
     feedback: OPEN_LOOP
     max_velocity:
-    - 1.0
+    - 3.0
     - 0.0
     - 1.5
     min_velocity:
