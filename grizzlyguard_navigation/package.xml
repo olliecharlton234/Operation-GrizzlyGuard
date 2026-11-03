@@ -3,19 +3,28 @@
 <package format="3">
   <name>grizzlyguard_navigation</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>GrizzlyGuard drone patrol routes and navigation</description>
   <maintainer email="olliecharlton234@gmail.com">oliver</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- C++ nodes -->
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
-  <depend>rclcpp_action</depend>
   <depend>nav2_msgs</depend>
+  <depend>visualization_msgs</depend>
 
+  <!-- Python patrol node (patrol_node.py) -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>nav2_simple_commander</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <!-- Simulation world, robots, Nav2 bringup -->
   <exec_depend>41068_ignition_bringup</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>

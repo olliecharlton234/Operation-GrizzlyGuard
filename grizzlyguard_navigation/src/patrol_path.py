@@ -4,11 +4,9 @@ waypoints, independent of ROS. A separate BasicNavigator instance is only
 needed later, when converting these waypoints into PoseStamped messages to
 send to Nav2 (PoseStamped needs a live clock, which the path object itself
 doesn't have).
+
+x = -75 to 75 and y = -40 to +235, z is just 0
 """
-
-from typing import List, Optional, Tuple
-from geometry_msgs.msg import PoseStamped
-
 
 class PatrolPath:
     """A named, ordered list of (x, y, z) waypoints for a patrol route.
@@ -30,12 +28,17 @@ class PatrolPath:
         """
         default_points = [
             (2.0, 2.0, 0.0),
-            (5.0, -3.0, 0.0),
-            (-4.0, -2.0, 0.0),
-            (-1.0, 4.0, 0.0),
+            (25.0, -25.0, 0.0),
+            (50.0, -40.0, 0.0),
+            (50.0, -10.0, 0.0),
+            (-20, 100, 0.0),
+            (-30, 150, 0.0),
         ]
+
+        
         self.set_path(default_points)
         return True
+
 
     def set_path(self, points: List[Tuple[float, float, float]]) -> None:
         """Replace the current waypoint list with `points`.

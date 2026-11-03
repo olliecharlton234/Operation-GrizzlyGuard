@@ -1,0 +1,113 @@
+lace.
+#
+# This is a PLAIN YAML file (not a ROS ros__parameters file). patrol_node.py
+# reads it with PyYAML, and you pick a route at launch:
+#
+#   ros2 run 41068_ignition_bringup patrol_node.py --ros-args -p route:=red_zone
+#
+# Coordinates are Gazebo WORLD metres (the numbers in gen_yellowstone.py).
+# `spawn` is subtracted to get parrot1_map coordinates, because the SLAM map's
+# origin is wherever the drone spawned.
+#
+# A route is EITHER
+#   waypoints: [[x, y], [x, y, z], ...]      explicit points (z optional), OR
+#   ring: {center, radius, start_deg, end_deg, points}
+#         points evenly spaced on an arc around a bear. Use this for the zone
+#         demos: every point sits at exactly `radius` from the bear, so the
+#         drone is guaranteed to stay in that zone.
+#
+# mode:
+#   loop          last waypoint -> first waypoint, repeat
+#   back_and_fwd  go to the end, then retrace the route in reverse, repeat
+#   once          run it one time and stop
+ 
+frame_id: parrot1_map
+spawn: {x: 0.0, y: 0.0}     # FROM LAUNCH FILE MUST CHECK!!!!!!!!!!!!!!!!!!!!!!!
+default_z: 0.0              # Nav2 is 2D; z is passed through to PatrolPath
+ 
+# Threat zones by distance to the NEAREST bear (from decision making).
+#   EMERGENCY  r <= 10   |   RED  10 < r < 15   |   YELLOW  15 < r <= 40   |   GREEN  r > 40
+zones:
+  emergency: 10.0
+  red: 15.0
+  yellow: 40.0
+ 
+# Static bears in worlds/yellowstone.sdf. bear_walk moves, this is its start.
+bears:
+  bear_spawn:    [4.5, 3.0]
+  bear_walk:     [-7.0, 4.0]
+  bear_treeline: [-6.0, 84.0]
+  bear_meadow:   [-34.0, 150.0]
+ 
+routes:
+ 
+  # ---------------------------------------------------------------- general patrols
+  short_route:
+    description: Forest and campground loop south of the river, ~200 m
+    mode: loop
+    waypoints:
+      # The spawn is NOT a waypoint: bear_spawn sits 5.4 m from it and bear_walk
+      # 8 m, so the loop keeps >= 15 m from both and closes along y = -15.
+      - [25.0, -15.0]     # south-east forest
+      - [30.0, 20.0]      # east forest
+      - [28.0, 45.0]
+      - [24.0, 68.0]      # campground, east side
+      - [-18.0, 66.0]     # camp road
+      - [-32.0, 40.0]     # west forest
+      - [-30.0, -15.0]    # south-west forest
+ 
+  long_route:
+    description: Full tour - forest, campground, bridge, Hayden Valley, Canyon Village, ~600 m
+    mode: loop
+    waypoints:
+      - [25.0, -15.0]     # south-east forest (spawn skipped - see short_route)
+      - [30.0, 20.0]      # east forest
+      - [22.0, 68.0]      # campground
+      - [20.0, 100.0]     # service track, bridge gate
+      - [20.0, 116.0]     # on the bridge
+      - [20.0, 134.0]     # north end of the bridge
+      - [50.0, 160.0]     # east valley
+      - [45.0, 208.0]     # village main street, east
+      - [-40.0, 208.0]    # village main street, west
+      - [-60.0, 175.0]    # west valley (passes bear_meadow at ~33 m: YELLOW)
+      - [-10.0, 185.0]    # swing north of bear_meadow, staying YELLOW
+      - [10.0, 150.0]     # back toward the bridge
+      - [20.0, 134.0]
+      - [20.0, 100.0]     # back across the river
+      - [24.0, 68.0]      # campground (a straight line to the camp road would
+      - [-18.0, 56.0]     #  clip bear_treeline at ~7 m - EMERGENCY)
+      - [-32.0, 40.0]     # west forest
+      - [-30.0, -15.0]    # south-west forest
+ 
+  # ------------------------------------------------------- threat-zone demos
+  # All four circle bear_meadow: it sits alone in the open valley, >60 m from
+  # every other bear, so the zone you see is caused by that bear only.
+ 
+  green_zone:
+    description: Arc 50 m east of bear_meadow - always GREEN
+    mode: back_and_fwd
+    ring: {center: bear_meadow, radius: 50.0, start_deg: -20, end_deg: 50, points: 5}
+ 
+  yellow_zone:
+    description: Arc 28 m around bear_meadow (north side, clear of the river) - always YELLOW
+    mode: back_and_fwd
+    ring: {center: bear_meadow, radius: 28.0, start_deg: -30, end_deg: 210, points: 7}
+ 
+  red_zone:
+    description: Full circle 12.5 m around bear_meadow - always RED
+    mode: loop
+    ring: {center: bear_meadow, radius: 12.5, start_deg: 0, end_deg: 315, points: 8}
+ 
+  emergency_zone:
+    description: Tight circle 6 m around bear_meadow - always EMERGENCY
+    mode: loop
+    ring: {center: bear_meadow, radius: 6.0, start_deg: 0, end_deg: 270, points: 4}
+ 
+  zone_approach:
+    description: Walk in GREEN -> YELLOW -> RED -> EMERGENCY then retreat (one run shows every response)
+    mode: back_and_fwd
+    waypoints:
+      - [16.0, 150.0]     # 50 m  GREEN
+      - [-6.0, 150.0]     # 28 m  YELLOW
+      - [-21.5, 150.0]    # 12.5 m RED
+      - [-28.0, 150.0]    # 6 m   EMERGENCY
