@@ -12,6 +12,8 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QFont>
+#include <QProgressBar>
+#include <QTimer>
 
 // ============================================================
 // TELEMETRY PANEL
@@ -28,6 +30,28 @@ TelemetryPanel::TelemetryPanel(QWidget *parent)
     nameFont.setBold(true);
     m_nameLabel->setFont(nameFont);
     layout->addWidget(m_nameLabel);
+
+    // --- Simulated battery level ---
+    auto *batteryBox = new QGroupBox("Battery");
+    auto *batteryLayout = new QHBoxLayout(batteryBox);
+
+    m_batteryBar = new QProgressBar();
+    m_batteryBar->setRange(0, 100);
+    m_batteryBar->setValue(m_batteryLevel);
+    m_batteryBar->setFormat("%p%");
+    m_batteryBar->setTextVisible(true);
+
+    m_batteryLabel = new QLabel("100%");
+    batteryLayout->addWidget(m_batteryBar, 1);
+    batteryLayout->addWidget(m_batteryLabel);
+    layout->addWidget(batteryBox);
+
+    // Battery is simulated locally in the GUI. It starts at 100%
+    // and decreases by 1% every 18 seconds. No ROS topic is required.
+    m_batteryTimer = new QTimer(this);
+    connect(m_batteryTimer, &QTimer::timeout,
+            this, &TelemetryPanel::updateBatteryLevel);
+    m_batteryTimer->start(18000);
 
     // --- Perimeter status ---
     auto *perimeterBox = new QGroupBox("Bear Perimeter Status");
@@ -48,6 +72,21 @@ TelemetryPanel::TelemetryPanel(QWidget *parent)
     layout->addWidget(deterrentBox);
 
     layout->addStretch();
+}
+
+// ============================================================
+// UPDATE SIMULATED BATTERY LEVEL
+// ============================================================
+void TelemetryPanel::updateBatteryLevel()
+{
+    if (m_batteryLevel <= 0) {
+        m_batteryTimer->stop();
+        return;
+    }
+
+    --m_batteryLevel;
+    m_batteryBar->setValue(m_batteryLevel);
+    m_batteryLabel->setText(QString("%1%").arg(m_batteryLevel));
 }
 
 // ============================================================
@@ -87,4 +126,3 @@ void TelemetryPanel::setDeterrentDeployed(bool deployed)
     m_deterrentIndicator->setDeployed(deployed);
     m_deterrentLabel->setText(deployed ? "Deployed" : "Not deployed");
 }
-
