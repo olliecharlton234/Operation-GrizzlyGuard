@@ -19,6 +19,7 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # Gamepad/controller support uses SDL2 (Qt6 has no built-in gamepad module).
 # Install it first:
@@ -77,7 +78,14 @@ else()
     target_link_libraries(BearDroneGUI PRIVATE ${geometry_msgs_LIBRARIES})
 endif()
 
-# std_msgs (manual-mode flag) is linked the same way.
+if(TARGET visualization_msgs::visualization_msgs)
+    target_link_libraries(BearDroneGUI PRIVATE visualization_msgs::visualization_msgs)
+else()
+    target_include_directories(BearDroneGUI PRIVATE ${visualization_msgs_INCLUDE_DIRS})
+    target_link_libraries(BearDroneGUI PRIVATE ${visualization_msgs_LIBRARIES})
+endif()
+
+# std_msgs (manual-mode flag and integration messages) is linked the same way.
 if(TARGET std_msgs::std_msgs)
     target_link_libraries(BearDroneGUI PRIVATE std_msgs::std_msgs)
 else()
