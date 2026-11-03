@@ -179,10 +179,10 @@ local_costmap:
       global_frame: parrot1_odom
       robot_base_frame: parrot1_base_link
       use_sim_time: true
-      rolling_window: true
-      width: 10
-      height: 10
-      resolution: 0.05
+      rolling_window: true # edit true
+      width: 10 # edited 10
+      height: 10 # edited 10
+      resolution: 0.05 # edited from 0.05
       footprint: '[ [0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5] ]'
       plugins:
       - obstacle_layer
@@ -208,7 +208,7 @@ local_costmap:
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_subscribe_transient_local: true
-      always_send_full_costmap: true
+      always_send_full_costmap: false # edited true
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -216,12 +216,16 @@ global_costmap:
       publish_frequency: 5.0
       global_frame: parrot1_map
       robot_base_frame: parrot1_base_link
+      origin_x: -85.0
+      origin_y: -50.0
+      rolling_window: false # added
+      width: 170 # added
+      height: 300 # added
       use_sim_time: true
       footprint: '[ [0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5] ]'
-      resolution: 0.1
+      resolution: 0.2 # edited from 1
       track_unknown_space: true
-      plugins:
-      - static_layer
+      plugins: # removes: "static_layer"
       - obstacle_layer
       - inflation_layer
       obstacle_layer:
@@ -245,7 +249,7 @@ global_costmap:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
         inflation_radius: 2.0
-      always_send_full_costmap: true
+      always_send_full_costmap: false # edited true
 map_server:
   ros__parameters:
     use_sim_time: true
