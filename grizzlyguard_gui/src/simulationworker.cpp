@@ -23,6 +23,16 @@ constexpr double kMaxAngularSpeed = 1.0;  // rad/s at full key press or full sti
 // The automatic-movement code subscribes to this. true = operator is flying
 // manually, so it must stop sending commands; false = it may resume.
 constexpr const char *kManualModeTopic = "/manual_mode";
+constexpr const char *kWorldPoseTopic = "/parrot1/world_pose";
+constexpr const char *kBearDetectionsTopic = "/bears/detections";
+constexpr const char *kBearLostTopic = "/bears/lost";
+constexpr const char *kPerimeterStatusTopic = "/perimeter/status";
+constexpr const char *kPerimeterAlertTopic = "/perimeter/alert";
+constexpr const char *kDeterrentStatusTopic = "/deterrent/status";
+constexpr const char *kTakeoffTopic = "/drone/takeoff";
+constexpr const char *kLandTopic = "/drone/land";
+constexpr const char *kReturnHomeTopic = "/drone/return_to_home";
+constexpr const char *kEmergencyStopTopic = "/drone/emergency_stop";
 constexpr int kRosSpinIntervalMs = 10; // ~100Hz - plenty for camera + telemetry callbacks
 }
 
@@ -62,7 +72,35 @@ void SimulationWorker::initialize()
 
     m_cmdVelPub = m_node->create_publisher<geometry_msgs::msg::Twist>(kCmdVelTopic, 10);
 
-    // subscription for 
+    // --- Integration subscriptions: message types are defined in INTEGRATION_NOTES.md ---
+    m_worldPoseSub = m_node->create_subscription<geometry_msgs::msg::PoseStamped>(
+        kWorldPoseTopic, 10,
+        [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) { onWorldPoseMessage(msg); });
+    m_bearDetectionsSub = m_node->create_subscription<visualization_msgs::msg::MarkerArray>(
+        kBearDetectionsTopic, 10,
+        [this](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { onBearMarkersMessage(msg); });
+    m_bearLostSub = m_node->create_subscription<std_msgs::msg::String>(
+        kBearLostTopic, 10, [this](const std_msgs::msg::String::SharedPtr msg) {
+            emit bearLost(QString::fromStdString(msg->data));
+        });
+    m_perimeterStatusSub = m_node->create_subscription<std_msgs::msg::UInt8>(
+        kPerimeterStatusTopic, 10, [this](const std_msgs::msg::UInt8::SharedPtr msg) {
+            emit perimeterStatusChanged(static_cast<int>(msg->data));
+        });
+    m_perimeterAlertSub = m_node->create_subscription<std_msgs::msg::String>(
+        kPerimeterAlertTopic, 10, [this](const std_msgs::msg::String::SharedPtr msg) {
+            emit perimeterAlertReceived(QString::fromStdString(msg->data));
+        });
+    m_deterrentStatusSub = m_node->create_subscription<std_msgs::msg::Bool>(
+        kDeterrentStatusTopic, 10, [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            emit deterrentDeployedChanged(msg->data);
+        });
+
+    // --- Integration command publishers ---
+    m_takeoffPub = m_node->create_publisher<std_msgs::msg::Empty>(kTakeoffTopic, 10);
+    m_landPub = m_node->create_publisher<std_msgs::msg::Empty>(kLandTopic, 10);
+    m_returnHomePub = m_node->create_publisher<std_msgs::msg::Empty>(kReturnHomeTopic, 10);
+    m_emergencyStopPub = m_node->create_publisher<std_msgs::msg::Empty>(kEmergencyStopTopic, 10);
 
     // --- REAL: manual/automatic hand-off flag. transient_local means a node that
     // starts later still receives the latest value straight away. ---
@@ -107,6 +145,32 @@ void SimulationWorker::onImageMessage(const sensor_msgs::msg::Image::SharedPtr m
     QImage frame = convertRosImageToQImage(msg);
     if (!frame.isNull())
         emit frameReady(frame);
+}
+
+// ============================================================
+// ON WORLD POSE MESSAGE
+// ============================================================
+void SimulationWorker::onWorldPoseMessage(const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+{
+    // This topic contract requires positions expressed in the Gazebo world frame.
+    // Do not feed /parrot1/odom directly into the map: its frame is parrot1_odom.
+    emit dronePositionChanged(msg->pose.position.x, msg->pose.position.y);
+}
+
+// ============================================================
+// ON BEAR MARKERS MESSAGE
+// ============================================================
+void SimulationWorker::onBearMarkersMessage(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+{
+    for (const auto &marker : msg->markers) {
+        const QString id = QString::fromStdString(marker.ns) + ":" + QString::number(marker.id);
+        if (marker.action == visualization_msgs::msg::Marker::DELETE) {
+            emit bearLost(id);
+        } else if (marker.action == visualization_msgs::msg::Marker::ADD ||
+                   marker.action == visualization_msgs::msg::Marker::MODIFY) {
+            emit bearDetected(id, marker.pose.position.x, marker.pose.position.y);
+        }
+    }
 }
 
 // ============================================================
@@ -247,8 +311,8 @@ void SimulationWorker::publishManualMode(bool manual)
 // ============================================================
 void SimulationWorker::onTakeoffRequested()
 {
-    qDebug() << "[SimulationWorker] takeoff";
-    // TODO: depends on drone control stack - see SIMULATION_INTERFACE.md
+    qDebug() << "[SimulationWorker] publishing takeoff request";
+    if (m_takeoffPub) m_takeoffPub->publish(std_msgs::msg::Empty{});
 }
 
 // ============================================================
@@ -256,8 +320,8 @@ void SimulationWorker::onTakeoffRequested()
 // ============================================================
 void SimulationWorker::onLandRequested()
 {
-    qDebug() << "[SimulationWorker] land";
-    // TODO: depends on drone control stack
+    qDebug() << "[SimulationWorker] publishing land request";
+    if (m_landPub) m_landPub->publish(std_msgs::msg::Empty{});
 }
 
 // ============================================================
@@ -265,8 +329,8 @@ void SimulationWorker::onLandRequested()
 // ============================================================
 void SimulationWorker::onReturnToHomeRequested()
 {
-    qDebug() << "[SimulationWorker] return to home";
-    // TODO: depends on drone control stack
+    qDebug() << "[SimulationWorker] publishing return-to-home request";
+    if (m_returnHomePub) m_returnHomePub->publish(std_msgs::msg::Empty{});
 }
 
 // ============================================================
@@ -274,9 +338,9 @@ void SimulationWorker::onReturnToHomeRequested()
 // ============================================================
 void SimulationWorker::onEmergencyStopRequested()
 {
-    qDebug() << "[SimulationWorker] Emergency landing NOT IMPLEMENTED; sending zero velocity only";
-    // IMPORTANT: cancel current action then land in place - NOT an instant
-    // motor cut, and NOT return-to-home-then-land. See SIMULATION_INTERFACE.md.
+    qDebug() << "[SimulationWorker] publishing emergency-stop request and zero velocity";
+    if (m_emergencyStopPub) m_emergencyStopPub->publish(std_msgs::msg::Empty{});
+    // The simulation-side subscriber must implement and validate the safe response.
     publishVelocity(0.0, 0.0, 0.0, 0.0);
     // No landing request is sent until the simulation supports one.
 }

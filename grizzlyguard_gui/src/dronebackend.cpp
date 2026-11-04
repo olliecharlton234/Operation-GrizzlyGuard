@@ -33,6 +33,8 @@ DroneBackend::DroneBackend(QObject *parent)
     connect(m_worker, &SimulationWorker::bearLost, this, &DroneBackend::bearLost);
     connect(m_worker, &SimulationWorker::droneNameChanged, this, &DroneBackend::droneNameChanged);
     connect(m_worker, &SimulationWorker::deterrentDeployedChanged, this, &DroneBackend::deterrentDeployedChanged);
+    connect(m_worker, &SimulationWorker::perimeterStatusChanged, this, &DroneBackend::perimeterStatusChanged);
+    connect(m_worker, &SimulationWorker::perimeterAlertReceived, this, &DroneBackend::perimeterAlertReceived);
 }
 
 // ============================================================
@@ -103,3 +105,4 @@ void DroneBackend::setManualModeActive(bool active)
     QMetaObject::invokeMethod(m_worker, "onManualModeChanged", Qt::QueuedConnection,
                               Q_ARG(bool, active));
 }
+

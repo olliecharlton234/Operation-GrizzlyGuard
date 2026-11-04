@@ -1,70 +1,128 @@
 // ============================================================
-// TELEMETRYPANEL.H
-// Telemetry panel interface and member declarations
+// TELEMETRYPANEL.CPP
+// Qt / ROS 2 GUI implementation
 // ============================================================
 
-#ifndef TELEMETRYPANEL_H
-#define TELEMETRYPANEL_H
+#include "telemetrypanel.h"
+#include "trafficlightwidget.h"
+#include "deterrentindicatorwidget.h"
 
-#include <QWidget>
-#include <QString>
-
-class QLabel;
-class QProgressBar;
-class TrafficLightWidget;
-class DeterrentIndicatorWidget;
-
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QGroupBox>
+#include <QFont>
+#include <QProgressBar>
+#include <QTimer>
 
 // ============================================================
-// TELEMETRY PANEL CLASS
+// TELEMETRY PANEL
 // ============================================================
-
-class TelemetryPanel : public QWidget
+TelemetryPanel::TelemetryPanel(QWidget *parent)
+    : QWidget(parent)
 {
-    Q_OBJECT
+    auto *layout = new QVBoxLayout(this);
 
-public:
-    explicit TelemetryPanel(QWidget *parent = nullptr);
+    // --- Drone identity ---
+    m_nameLabel = new QLabel("Drone: --");
+    QFont nameFont = m_nameLabel->font();
+    nameFont.setPointSize(nameFont.pointSize() + 2);
+    nameFont.setBold(true);
+    m_nameLabel->setFont(nameFont);
+    layout->addWidget(m_nameLabel);
 
+    // --- Simulated battery level ---
+    auto *batteryBox = new QGroupBox("Battery");
+    auto *batteryLayout = new QHBoxLayout(batteryBox);
 
-    // ========================================================
-    // PUBLIC SLOTS
-    // ========================================================
+    m_batteryBar = new QProgressBar();
+    m_batteryBar->setRange(0, 100);
+    m_batteryBar->setValue(m_batteryLevel);
+    m_batteryBar->setFormat("%p%");
+    m_batteryBar->setTextVisible(true);
 
-public slots:
+    m_batteryLabel = new QLabel("100%");
+    batteryLayout->addWidget(m_batteryBar, 1);
+    batteryLayout->addWidget(m_batteryLabel);
+    layout->addWidget(batteryBox);
 
-    // Update the drone's displayed name
-    void setDroneName(const QString &name);
+    // Battery is simulated locally in the GUI. It starts at 100%
+    // and decreases by 1% every 18 seconds. No ROS topic is required.
+    m_batteryTimer = new QTimer(this);
+    connect(m_batteryTimer, &QTimer::timeout,
+            this, &TelemetryPanel::updateBatteryLevel);
+    m_batteryTimer->start(18000);
 
-    // Update the simulated battery percentage
-    void setBatteryPercent(int percent);
+    // --- Perimeter status ---
+    auto *perimeterBox = new QGroupBox("Bear Perimeter Status");
+    auto *perimeterLayout = new QHBoxLayout(perimeterBox);
+    m_trafficLight = new TrafficLightWidget();
+    perimeterLayout->addWidget(m_trafficLight);
+    perimeterLayout->addStretch();
+    layout->addWidget(perimeterBox);
 
-    // Update the perimeter warning indicator
-    void setPerimeterDistance(double distanceMeters);
+    // --- Deterrent status ---
+    auto *deterrentBox = new QGroupBox("Deterrent");
+    auto *deterrentLayout = new QHBoxLayout(deterrentBox);
+    m_deterrentIndicator = new DeterrentIndicatorWidget();
+    m_deterrentLabel = new QLabel("Awaiting data");
+    deterrentLayout->addWidget(m_deterrentIndicator);
+    deterrentLayout->addWidget(m_deterrentLabel);
+    deterrentLayout->addStretch();
+    layout->addWidget(deterrentBox);
 
-    // Update the deterrent status
-    void setDeterrentDeployed(bool deployed);
+    layout->addStretch();
+}
 
+// ============================================================
+// UPDATE SIMULATED BATTERY LEVEL
+// ============================================================
+void TelemetryPanel::updateBatteryLevel()
+{
+    if (m_batteryLevel <= 0) {
+        m_batteryTimer->stop();
+        return;
+    }
 
-    // ========================================================
-    // PRIVATE MEMBERS
-    // ========================================================
+    --m_batteryLevel;
+    m_batteryBar->setValue(m_batteryLevel);
+    m_batteryLabel->setText(QString("%1%").arg(m_batteryLevel));
+}
 
-private:
+// ============================================================
+// SET DRONE NAME
+// ============================================================
+void TelemetryPanel::setDroneName(const QString &name)
+{
+    m_nameLabel->setText(QString("Drone: %1").arg(name));
+}
 
-    // Drone identification
-    QLabel *m_nameLabel = nullptr;
+// ============================================================
+// SET PERIMETER DISTANCE
+// ============================================================
+void TelemetryPanel::setPerimeterDistance(double distanceMeters)
+{
+    m_trafficLight->setDistanceToPerimeter(distanceMeters);
+}
 
-    // Simulated battery
-    QLabel *m_batteryLabel = nullptr;
-    QProgressBar *m_batteryBar = nullptr;
+// ============================================================
+// SET PERIMETER STATUS
+// ============================================================
+void TelemetryPanel::setPerimeterStatus(int status)
+{
+    switch (status) {
+    case 1: m_trafficLight->setLevel(TrafficLightWidget::Level::Safe); break;
+    case 2: m_trafficLight->setLevel(TrafficLightWidget::Level::Caution); break;
+    case 3: m_trafficLight->setLevel(TrafficLightWidget::Level::Danger); break;
+    default: m_trafficLight->setLevel(TrafficLightWidget::Level::Unknown); break;
+    }
+}
 
-    // Perimeter status
-    TrafficLightWidget *m_trafficLight = nullptr;
-
-    // Deterrent status
-    DeterrentIndicatorWidget *m_deterrentIndicator = nullptr;
-    QLabel *m_deterrentLabel = nullptr;
-};
-
-#endif // TELEMETRYPANEL_H
+// ============================================================
+// SET DETERRENT DEPLOYED
+// ============================================================
+void TelemetryPanel::setDeterrentDeployed(bool deployed)
+{
+    m_deterrentIndicator->setDeployed(deployed);
+    m_deterrentLabel->setText(deployed ? "Deployed" : "Not deployed");
+}

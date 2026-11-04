@@ -50,6 +50,8 @@ signals:
     void bearLost(const QString &bearId);
     void droneNameChanged(const QString &name);
     void deterrentDeployedChanged(bool deployed);
+    void perimeterStatusChanged(int status);
+    void perimeterAlertReceived(const QString &message);
 
     // True once SimulationWorker::initialized() fires (the ROS2 node is up).
     void connectionStatusChanged(bool connected);
@@ -66,6 +68,11 @@ private:
     QThread *m_thread;
     SimulationWorker *m_worker; // lives on m_thread, not the GUI thread
 };
+
+
+
+#endif // DRONEBACKEND_H
+
 
 
 
