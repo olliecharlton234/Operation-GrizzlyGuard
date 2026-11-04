@@ -9,16 +9,20 @@
 // It copies Nav2's x / yaw velocity straight through and fills in linear.z
 // with a P-controller toward the target altitude. Nav2 never knows z exists.
 //
-// For this to move the drone, the Gazebo plugin on the parrot must accept
-// linear.z (VelocityControl, not DiffDrive), and Nav2's output must be
-// remapped from cmd_vel to cmd_vel_nav. See Z_INTEGRATION.md.
+// While the GUI's /manual_mode is true it publishes nothing, so the operator's
+// /cmd_vel is the only command reaching Gazebo.
 //
-//   ros2 run grizzlyguard_navigation altitude_controller --ros-args -r __ns:=/parrot1
+//   ros2 run grizzlyguard_navigation altitude_controller --ros-args \
+//       -r __ns:=/parrot1 -p min_altitude:=0.2
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <csignal>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -40,7 +44,6 @@ public:
     tolerance_ = declare_parameter<double>("tolerance", 0.15);   // "reached" band
     nav_timeout_ = declare_parameter<double>("nav_timeout", 0.5);  // s
     target_ = declare_parameter<double>("initial_altitude", 2.0);
-    //manual_sub_ = declare_parameter<std::string>("manual_sub", "/manual_mode");
 
     nav_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       "cmd_vel_nav", 10, [this](geometry_msgs::msg::Twist::SharedPtr m) {
@@ -57,35 +60,60 @@ public:
         target_ = t;
       });
 
+    // SensorDataQoS (best effort) accepts both best-effort and reliable
+    // publishers. A default (reliable) subscription silently receives nothing
+    // from a best-effort publisher such as the Gazebo bridge.
+    const auto odom_topic = declare_parameter<std::string>("odom_topic", "odometry");
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
-      declare_parameter<std::string>("odom_topic", "odometry"), 10,
+      odom_topic, rclcpp::SensorDataQoS(),
       [this](nav_msgs::msg::Odometry::SharedPtr m) {
         z_ = m->pose.pose.position.z;
+        if (!have_odom_) {
+          RCLCPP_INFO(get_logger(), "Odometry received, current z = %.2f m", z_);
+        }
         have_odom_ = true;
+      });
+
+    // GUI manual-mode hand-off. Absolute topic (this node runs in /parrot1) and
+    // transient_local so the latched value published before we started arrives.
+    manual_sub_ = create_subscription<std_msgs::msg::Bool>(
+      "/manual_mode", rclcpp::QoS(1).transient_local().reliable(),
+      [this](std_msgs::msg::Bool::SharedPtr m) {
+        if (m->data && !manual_) {
+          cmd_pub_->publish(geometry_msgs::msg::Twist{});  // final zero before going quiet
+          RCLCPP_INFO(get_logger(), "Manual mode: releasing cmd_vel");
+        } else if (!m->data && manual_) {
+          RCLCPP_INFO(get_logger(), "Manual mode off: resuming control");
+        }
+        manual_ = m->data;
       });
 
     cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
     reached_pub_ = create_publisher<std_msgs::msg::Bool>("altitude_reached", 10);
 
+    RCLCPP_INFO(get_logger(), "Listening for odometry on %s",
+      get_node_topics_interface()->resolve_topic_name(odom_topic).c_str());
+
     last_nav_ = now();
     timer_ = create_wall_timer(50ms, [this]() { tick(); });
+  }
 
-    manual_sub_ = create_subscription<std_msgs::msg::Bool>(
-    "/manual_mode",                                   // absolute, not relative
-    rclcpp::QoS(1).transient_local().reliable(),      // receive the latched value
-    [this](std_msgs::msg::Bool::SharedPtr m) {
-        if (m->data && !manual_) {
-        cmd_pub_->publish(geometry_msgs::msg::Twist{}); // final zero before going quiet
-        RCLCPP_INFO(get_logger(), "Manual mode: releasing cmd_vel");
-        }
-        manual_ = m->data;
-    });
+  // Send zero velocity a few times so Gazebo stops holding the last command.
+  void stopDrone()
+  {
+    if (manual_) return;  // the GUI owns cmd_vel; don't override the operator
+    RCLCPP_INFO(get_logger(), "Shutting down: sending zero velocity");
+    for (int i = 0; i < 5; ++i) {
+      cmd_pub_->publish(geometry_msgs::msg::Twist{});
+      std::this_thread::sleep_for(20ms);
+    }
   }
 
 private:
   void tick()
   {
-    if (manual_) return;
+    if (manual_) return;  // GUI owns /cmd_vel while the operator is flying
+
     geometry_msgs::msg::Twist out;
 
     // Pass Nav2's horizontal command through, unless it has gone stale
@@ -111,24 +139,41 @@ private:
   double kp_, max_vz_, min_alt_, max_alt_, tolerance_, nav_timeout_;
   double target_, z_{0.0};
   bool have_odom_{false};
+  bool manual_{false};
   geometry_msgs::msg::Twist nav_cmd_;
   rclcpp::Time last_nav_;
-  bool manual_{false};
-  
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr manual_sub_;
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr nav_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr target_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr manual_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr reached_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
+// Gazebo's VelocityControl keeps applying the LAST velocity it received, forever.
+// If this node is killed mid-climb/descent the drone keeps moving (through the
+// ground, since collisions are off). So handle Ctrl+C ourselves and send a final
+// zero command before shutting down.
+static std::atomic<bool> g_stop{false};
+
+void stopHandler(int) { g_stop = true; }
+
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<AltitudeController>());
+  rclcpp::init(argc, argv, rclcpp::InitOptions(), rclcpp::SignalHandlerOptions::None);
+  std::signal(SIGINT, stopHandler);
+  std::signal(SIGTERM, stopHandler);
+
+  auto node = std::make_shared<AltitudeController>();
+  rclcpp::executors::SingleThreadedExecutor exec;
+  exec.add_node(node);
+  while (rclcpp::ok() && !g_stop) {
+    exec.spin_some(50ms);
+  }
+
+  node->stopDrone();
   rclcpp::shutdown();
   return 0;
 }
