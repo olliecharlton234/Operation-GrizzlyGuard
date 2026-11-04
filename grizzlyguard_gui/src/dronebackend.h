@@ -72,8 +72,3 @@ private:
 
 
 #endif // DRONEBACKEND_H
-
-
-
-
-#endif // DRONEBACKEND_H

@@ -1,17 +1,21 @@
 # COPY PASTE THESE COMMANDS 
-## TERMINAL 1
+## TERMINAL 1 - set up simulation environment
 cd ~/RS1-Workspace/Operation-GrizzlyGuard
 colcon build --symlink-install --packages-select 41068_ignition_bringup
 source install/setup.bash
 ros2 launch 41068_ignition_bringup 41068_ignition_parrot.launch.py slam:=true nav2:=true rviz:=true world:=yellowstone 2>&1 | tee ~/sim.log
 
+## Terminal 2 - run altitude
+cd ~/RS1-Workspace/Operation-GrizzlyGuard && source install/setup.bash
+ros2 run grizzlyguard_navigation altitude_controller --ros-args -r __ns:=/parrot1 -r cmd_vel_nav:=cmd_vel -r cmd_vel:=cmd_vel_gz -p min_altitude:=0.2
 
-## TERMINAL 2
+
+## TERMINAL 3 - run patrol_node
 cd ~/RS1-Workspace/Operation-GrizzlyGuard && source install/setup.bash
 ros2 param get /parrot1/global_costmap/global_costmap origin_y     # should print -50.0
 ros2 run grizzlyguard_navigation patrol_node.py --ros-args -p route:=short_route -p use_sim_time:=true
 
-## Terminal 3 optional, to see where the current progress on patrol path 
+## Terminal 4 ** optional **, to see where the current progress on patrol path 
 run this in a terminal, it will show what number waypoint the drone is on
 
 cd ~/RS1-Workspace/Operation-GrizzlyGuard && source install/setup.bash

@@ -32,6 +32,7 @@ install(PROGRAMS
   src/patrol_node.py
   src/patrol_path.py
   src/route_loader.py
+  src/world_pose_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
