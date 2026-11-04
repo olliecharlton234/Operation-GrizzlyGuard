@@ -62,6 +62,8 @@ void SimulationWorker::initialize()
 
     m_cmdVelPub = m_node->create_publisher<geometry_msgs::msg::Twist>(kCmdVelTopic, 10);
 
+    // subscription for 
+
     // --- REAL: manual/automatic hand-off flag. transient_local means a node that
     // starts later still receives the latest value straight away. ---
     m_manualModePub = m_node->create_publisher<std_msgs::msg::Bool>(
