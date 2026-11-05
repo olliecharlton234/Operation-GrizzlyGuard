@@ -93,6 +93,10 @@ def main():
     # patrol anyway in 2D instead of stopping in IDLE.
     strict_alt = bool(nav.declare_parameter('strict_altitude', True).value)
     follow_timeout = float(nav.declare_parameter('follow_timeout', 5.0).value)
+    # Hover this long after takeoff before patrolling, so perception can check for
+    # a bear near the start while the camera is on it. The patrol leaves quickly and
+    # doesn't come back for minutes.
+    takeoff_hold = float(nav.declare_parameter('takeoff_hold', 12.0).value)
 
     # ---------------- ROS interfaces ----------------
     alt_pub = nav.create_publisher(Float64, 'target_altitude', 10)       # /parrot1/target_altitude
@@ -285,6 +289,11 @@ def main():
             result = wait_for_altitude(cruise_z, 'TAKEOFF')
             if result == 'done':
                 status('TAKEOFF COMPLETE')
+                hold_end = time.monotonic() + takeoff_hold
+                while time.monotonic() < hold_end and not interrupted() and not following():
+                    send_altitude(cruise_z)
+                    status('TAKEOFF COMPLETE: checking for bears')
+                    spin(0.2)
                 mode = Mode.PATROL
             elif result == 'timeout':
                 if strict_alt:
