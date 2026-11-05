@@ -5,10 +5,13 @@ This joins perception to the rest of the system:
 
   YOLO box + drone pose -> bear position on the map -> threat zone -> response
 
+The trained bear model also boxes people at close range, so a bear box that overlaps
+a box from the person detector is ignored.
+
 Response per zone (the deterrent comes from decision_logic.py):
   GREEN      note the bear and its location, keep patrolling
-  YELLOW     play sound, follow the bear until it is back in green
-  RED        spray, follow the bear; changes to sound once it reaches yellow
+  YELLOW     fly to within 10 m, play sound, follow until the bear is back in green
+  RED        fly to within 10 m, spray, follow; changes to sound once it reaches yellow
   EMERGENCY  no deterrent, follow the bear, send the critical alert
 
 Subscribes:
@@ -32,6 +35,7 @@ Publishes:
 """
 import math
 import statistics
+import time
 from collections import deque
 
 import rclpy
@@ -56,6 +60,7 @@ MAX_RANGE_M = 15.0
 FIXES_KEPT = 3            # positions are the median of this many, to steady them
 FIXES_TO_CHANGE = 3       # sightings in a new zone before believing it, so one false
 CONFIRM_WITHIN_S = 6.0    # box can't trigger a response; they must be this close in time
+DETERRENT_RANGE_M = 10.0  # decision_logic: approach to 5-10 m, then use the deterrent
 FOLLOW_GAP_M = 4.0        # how far from the bear the drone tries to stay
 # YOLO tends to lose a bear walking away near the green line, so get closer there to
 # make it look bigger in the camera and see it cross.
@@ -69,6 +74,9 @@ FACING_RAD = 0.6          # only move forward when roughly facing the bear
 STOP_DISTANCE_M = 2.5     # stop if the laser sees something this close ahead
 AHEAD_RAD = 0.5           # width either side of straight ahead to check
 NOT_BEAR_EVERY_S = 10.0   # how often to repeat the "not a bear" message
+PERSON_OVERLAP = 0.3      # share of the smaller box covered, to call them the same thing
+PERSON_MATCH_S = 0.7      # a person frame this close in sim time counts as the same moment
+PERSON_WAIT_S = 1.0       # how long a bear box waits for the person detector's answer
 
 # Only these drone states may follow a bear or use a deterrent. An e-stop, manual
 # control, returning home or landing always wins.
@@ -89,6 +97,18 @@ def q_rot(q, v):
 
 def stamp_s(stamp):
     return stamp.sec + stamp.nanosec * 1e-9
+
+
+def overlap(a, b):
+    """How much of the smaller of two detections' boxes the other one covers, 0 to 1."""
+    w = (min(a.bbox.center.position.x + a.bbox.size_x / 2, b.bbox.center.position.x + b.bbox.size_x / 2)
+         - max(a.bbox.center.position.x - a.bbox.size_x / 2, b.bbox.center.position.x - b.bbox.size_x / 2))
+    h = (min(a.bbox.center.position.y + a.bbox.size_y / 2, b.bbox.center.position.y + b.bbox.size_y / 2)
+         - max(a.bbox.center.position.y - a.bbox.size_y / 2, b.bbox.center.position.y - b.bbox.size_y / 2))
+    if w <= 0.0 or h <= 0.0:
+        return 0.0
+    smaller = min(a.bbox.size_x * a.bbox.size_y, b.bbox.size_x * b.bbox.size_y)
+    return w * h / smaller if smaller > 0.0 else 0.0
 
 
 class BearResponseNode(Node):
@@ -115,6 +135,9 @@ class BearResponseNode(Node):
         self.deterrent = None      # what the bears were last told
         self.drone_state = ''
         self.last_not_bear = None
+        self.people = deque(maxlen=20)   # (time, detections) from the person detector
+        self.waiting = deque()           # (wall time, msg) bear boxes awaiting that answer
+        self.ignored = 0
         self.clear_ahead = math.inf
 
         self.marker_pub = self.create_publisher(MarkerArray, '/bears/detections', 10)
@@ -135,6 +158,7 @@ class BearResponseNode(Node):
         self.create_subscription(LaserScan, '/parrot1/scan', self.on_scan, qos_profile_sensor_data)
         self.create_timer(1.0, self.tick)
         self.create_timer(0.2, self.steer)
+        self.create_timer(0.1, self.check_waiting)
 
     # ------------------------------------------------------------ inputs
     def on_odom(self, msg):
@@ -161,7 +185,8 @@ class BearResponseNode(Node):
         self.alert('RETURN TO HOME: drone flying back to its start point')
 
     def on_not_bear(self, msg):
-        """Report a person once in a while, and do nothing else about them."""
+        """Remember this frame's people, and report them once in a while."""
+        self.people.append((stamp_s(msg.header.stamp), msg.detections))
         if not msg.detections or not self.odom:
             return
         now = self.odom[-1][0]
@@ -173,9 +198,31 @@ class BearResponseNode(Node):
         self.alert(text)
 
     def on_bears(self, msg):
-        if not msg.detections:
-            return
-        best = max(msg.detections, key=lambda d: d.results[0].hypothesis.score if d.results else 0.0)
+        if msg.detections:
+            self.waiting.append((time.monotonic(), msg))
+
+    def check_waiting(self):
+        """Act on bear boxes once the person detector has seen that moment too."""
+        while self.waiting:
+            queued_at, msg = self.waiting[0]
+            t = stamp_s(msg.header.stamp)
+            answered = any(person_t >= t for person_t, _ in self.people)
+            if not answered and time.monotonic() - queued_at < PERSON_WAIT_S:
+                return
+            self.waiting.popleft()
+            people = [p for person_t, frame in self.people if abs(person_t - t) <= PERSON_MATCH_S
+                      for p in frame]
+            bears = [d for d in msg.detections
+                     if all(overlap(d, p) < PERSON_OVERLAP for p in people)]
+            if len(bears) < len(msg.detections):
+                self.ignored += 1
+                self.get_logger().info(f'Ignored a bear box on a person ({self.ignored} so far)',
+                                       throttle_duration_sec=10.0)
+            if bears:
+                self.handle_bear(bears, msg)
+
+    def handle_bear(self, detections, msg):
+        best = max(detections, key=lambda d: d.results[0].hypothesis.score if d.results else 0.0)
         odom = self.pose_at(stamp_s(msg.header.stamp))
         if odom is None:
             return
@@ -257,6 +304,8 @@ class BearResponseNode(Node):
         kind = DETERRENT_KIND.get(decision_for_threat(self.zone).deterrent)
         if kind == self.deterrent:
             return
+        if kind is not None and self.drone_to_bear() > DETERRENT_RANGE_M:
+            return                       # still flying in; tick() tries again
         self.deterrent = kind
         self.deterrent_status_pub.publish(Bool(data=kind is not None))
         if kind is not None:
@@ -266,6 +315,12 @@ class BearResponseNode(Node):
             self.alert(f'Deterrent deployed: {kind}')
         else:
             self.alert('Deterrent stopped')
+
+    def drone_to_bear(self):
+        if not self.odom or self.bear is None:
+            return math.inf
+        p = self.odom[-1][1].pose.pose.position
+        return math.hypot(p.x - self.bear[0], p.y - self.bear[1])
 
     def steer(self):
         """While following, turn to face the bear and close to FOLLOW_GAP_M.

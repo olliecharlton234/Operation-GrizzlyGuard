@@ -20,8 +20,9 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-# People are the only "not a bear" the trained model can't see, so the not_a_bear
-# scenario also runs the standard model looking for class "person".
+# The trained model only knows bears and sometimes boxes people as one, so the standard
+# model also looks for class "person". bear_response_node ignores bear boxes on people.
+# Without this file the system still runs, but with no person check.
 PERSON_MODEL = 'yolo26n.onnx'
 
 
@@ -53,15 +54,14 @@ def _setup(context):
         Node(package='grizzlyguard_decision', executable='bear_response_node.py',
              name='bear_response_node', output='screen', parameters=[sim_time]),
     ]
-    if scenario == 'not_a_bear':
-        delayed.append(Node(
-            package='grizzlyguard_perception', executable='bear_yolo_node',
-            name='person_yolo_node', namespace='parrot1', output='screen',
-            remappings=[('bear_detections', 'nonbear_detections'),
-                        ('bear_detected', 'nonbear_detected'),
-                        ('bear_detections/image', 'nonbear_detections/image')],
-            parameters=[os.path.join(perception, 'config', 'bear_yolo.yaml'), sim_time,
-                        {'model_path': PERSON_MODEL, 'target_class': 'person'}]))
+    delayed.append(Node(
+        package='grizzlyguard_perception', executable='bear_yolo_node',
+        name='person_yolo_node', namespace='parrot1', output='screen',
+        remappings=[('bear_detections', 'nonbear_detections'),
+                    ('bear_detected', 'nonbear_detected'),
+                    ('bear_detections/image', 'nonbear_detections/image')],
+        parameters=[os.path.join(perception, 'config', 'bear_yolo.yaml'), sim_time,
+                    {'model_path': PERSON_MODEL, 'target_class': 'person'}]))
     if get('gui').lower() == 'true':
         # The GUI is plain CMake, not a ROS package, so its program stays in the build folder.
         workspace = os.path.dirname(os.path.dirname(get_package_prefix('grizzlyguard_decision')))
