@@ -165,9 +165,11 @@ def heading_to_yaw(h):
 # It keeps one connection open, which is what makes 30 updates a second possible.
 def find_bridge():
     here = os.path.dirname(os.path.abspath(__file__))
+    workspace_root = os.path.abspath(os.path.join(here, '..', '..'))
     for c in (shutil.which('pose_bridge'),
-              os.path.join(here, '..', '..', '..', 'install', '41068_ignition_bringup',
-                           'lib', '41068_ignition_bringup', 'pose_bridge'),
+              os.path.join(workspace_root, 'install', '41068_ignition_bringup', 'lib',
+                           '41068_ignition_bringup', 'pose_bridge'),
+              os.path.join(workspace_root, 'build', '41068_ignition_bringup', 'pose_bridge'),
               os.path.join(here, 'pose_bridge')):
         if c and os.path.exists(c):
             return os.path.abspath(c)

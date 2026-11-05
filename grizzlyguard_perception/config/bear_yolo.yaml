@@ -2,7 +2,7 @@
 /**:
   ros__parameters:
     # Absolute path, or a file name inside this package's models/ folder.
-    model_path: "yolo26n.onnx"
+    model_path: "bear_custom.onnx"
     # Relative to the node namespace: parrot1 namespace -> /parrot1/camera/image
     image_topic: "camera/image"
 
@@ -13,7 +13,7 @@
     # Class names come from the ONNX export's metadata. Only if a model lacks them, add:
     # class_names: ["bear"]          (list index = class id)
 
-    confidence_threshold: 0.25
+    confidence_threshold: 0.10
     iou_threshold: 0.45        # used only for raw (non-end2end) exports
     inference_size: 640        # must match the exported model's input size
     output_format: "auto"      # auto | raw | end2end

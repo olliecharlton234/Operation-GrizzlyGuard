@@ -26,9 +26,10 @@ from threat_zones import ThreatLevel
 class BearFollowController:
     """Translate a bear threat decision into a follow/motion policy."""
 
-    follow_offset_m: float = 2.0
-    close_offset_m: float = 1.5
-    emergency_offset_m: float = 1.0
+    # Keep the drone at a steady 5 m offset from the bear while tracking it.
+    follow_offset_m: float = 5.0
+    close_offset_m: float = 5.0
+    emergency_offset_m: float = 5.0
     controller: DecisionController = None
     current_target: Optional[tuple[float, float]] = None
 
@@ -47,13 +48,13 @@ class BearFollowController:
             action = "Hold patrol and do not chase the bear"
         elif threat == ThreatLevel.YELLOW:
             target = (x + self.follow_offset_m, y)
-            action = "Move to follow bear at a safe offset and keep deterrent sound active"
+            action = "Follow the bear at a 5 m offset and keep deterrent sound active"
         elif threat == ThreatLevel.RED:
             target = (x + self.close_offset_m, y)
-            action = "Move closer and maintain repellent tracking behavior"
+            action = "Follow the bear at a 5 m offset and maintain repellent tracking behavior"
         else:
             target = (x + self.emergency_offset_m, y)
-            action = "Maintain emergency tracking and critical alert behavior"
+            action = "Maintain emergency tracking at a 5 m offset and critical alert behavior"
 
         self.current_target = target
         return threat, action, target
