@@ -6,45 +6,66 @@
 #include "deterrentindicatorwidget.h"
 
 #include <QPainter>
+#include <QRadialGradient>
 
-// ============================================================
-// DETERRENT INDICATOR WIDGET
-// ============================================================
 DeterrentIndicatorWidget::DeterrentIndicatorWidget(QWidget *parent)
     : QWidget(parent)
 {
     setMinimumSize(60, 60);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    setToolTip("Deterrent status (/deterrent/status)");
 }
 
-// ============================================================
-// SET DEPLOYED
-// ============================================================
 void DeterrentIndicatorWidget::setDeployed(bool deployed)
 {
-    if (m_deployed == deployed)
+    // Always repaint on the first message so the "?" state clears even if
+    // the first value is false.
+    if (m_hasData && m_deployed == deployed)
         return;
+    m_hasData = true;
     m_deployed = deployed;
     update();
 }
 
-// ============================================================
-// PAINT EVENT
-// ============================================================
 void DeterrentIndicatorWidget::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // Housing
-    painter.setBrush(QColor(30, 30, 30));
+    // Housing (same style as the traffic light)
     painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(30, 30, 30));
     painter.drawRoundedRect(rect().adjusted(2, 2, -2, -2), 10, 10);
 
-    const int diameter = qMin(width() - 20, height() - 20);
-    const int x = (width() - diameter) / 2;
-    const int y = (height() - diameter) / 2;
+    const int diameter = qMax(10, qMin(width(), height()) - 20);
+    const QRectF lamp((width() - diameter) / 2.0, (height() - diameter) / 2.0,
+                      diameter, diameter);
 
-    QColor onColor(255, 150, 0); // orange - "deterrent active/deployed"
-    painter.setBrush(m_deployed ? onColor : onColor.darker(400));
-    painter.drawEllipse(x, y, diameter, diameter);
+    if (!m_hasData) {
+        // No data yet: visible grey lamp with a question mark.
+        painter.setPen(QPen(QColor(150, 150, 150), 2));
+        painter.setBrush(QColor(80, 80, 80));
+        painter.drawEllipse(lamp);
+        QFont f = painter.font();
+        f.setBold(true);
+        f.setPixelSize(diameter / 2);
+        painter.setFont(f);
+        painter.setPen(QColor(200, 200, 200));
+        painter.drawText(lamp, Qt::AlignCenter, "?");
+        return;
+    }
+
+    const QColor on(255, 150, 0);
+    if (m_deployed) {
+        QRadialGradient glow(lamp.center(), diameter / 2.0);
+        glow.setColorAt(0.0, on.lighter(150));
+        glow.setColorAt(1.0, on);
+        painter.setPen(QPen(on.lighter(130), 2));
+        painter.setBrush(glow);
+    } else {
+        // Off but clearly visible against the housing.
+        painter.setPen(QPen(on.darker(160), 2));
+        painter.setBrush(QColor(90, 60, 20));
+    }
+    painter.drawEllipse(lamp);
 }

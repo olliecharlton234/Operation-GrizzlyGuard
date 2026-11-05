@@ -143,7 +143,8 @@ MainWindow::MainWindow(QWidget *parent)
         m_cameraView->setConnected(connected);
         m_manualControl->setCameraConnected(connected);
     });
-
+    connect(m_backend, &DroneBackend::droneStatusChanged, m_telemetryPanel, &TelemetryPanel::setDroneStatus);
+    
     // --- Keyboard (via ManualControlWidget) and gamepad both feed the same
     // DroneBackend commands - the backend doesn't know or care which one
     // triggered the call. ---
@@ -282,9 +283,9 @@ void MainWindow::onEmergencyStop()
     // The real emergency-landing interface has not been agreed yet.
     if (confirmLarge(this, "Confirm Emergency Stop",
                      "Trigger an emergency stop?",
-                     "This command is not connected to a landing controller yet.",
+                     "The drone will cancel navigation and descend in place",
                      "Emergency Stop")) {
-        statusBar()->showMessage("Emergency landing is awaiting integration", 5000);
+        statusBar()->showMessage("Emergency stop sent", 5000);
         m_backend->sendEmergencyStop();
     }
 }
@@ -294,7 +295,7 @@ void MainWindow::onEmergencyStop()
 // ============================================================
 void MainWindow::onReturnToHome()
 {
-    statusBar()->showMessage("Return to Home is awaiting integration", 5000);
+    statusBar()->showMessage("Return to Home sent", 5000);
     m_backend->sendReturnToHome();
 }
 

@@ -38,6 +38,7 @@ public slots:
     void setPerimeterDistance(double distanceMeters);
     void setPerimeterStatus(int status);   // 1 = SAFE, 2 = CAUTION, 3 = DANGER, other = UNKNOWN
     void setDeterrentDeployed(bool deployed);
+    void setDroneStatus(const QString &status);
 
     // -------------------------------------------------------
     // PRIVATE SLOTS
@@ -50,6 +51,8 @@ private slots:
     // -------------------------------------------------------
 private:
     QLabel *m_nameLabel = nullptr;
+
+    QLabel *m_statusLabel = nullptr;
 
     QProgressBar *m_batteryBar = nullptr;
     QLabel *m_batteryLabel = nullptr;
