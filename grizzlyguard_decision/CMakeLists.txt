@@ -17,6 +17,9 @@ install(PROGRAMS
   RENAME nav_follow_bridge
 )
 
+install(PROGRAMS perimeter_status_node.py threat_zones.py
+  DESTINATION lib/${PROJECT_NAME})
+
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
