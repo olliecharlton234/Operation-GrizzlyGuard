@@ -9,6 +9,7 @@
 #include <QDebug>
 #include <QThread>
 #include <QtEndian>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -29,11 +30,22 @@ constexpr const char *kBearLostTopic = "/bears/lost";
 constexpr const char *kPerimeterStatusTopic = "/perimeter/status";
 constexpr const char *kPerimeterAlertTopic = "/perimeter/alert";
 constexpr const char *kDeterrentStatusTopic = "/deterrent/status";
+constexpr const char *kDroneStatusTopic = "/drone/status";
 constexpr const char *kTakeoffTopic = "/drone/takeoff";
 constexpr const char *kLandTopic = "/drone/land";
 constexpr const char *kReturnHomeTopic = "/drone/return_to_home";
 constexpr const char *kEmergencyStopTopic = "/drone/emergency_stop";
 constexpr int kRosSpinIntervalMs = 10; // ~100Hz - plenty for camera + telemetry callbacks
+
+// --- Manual-mode takeoff / land (world-frame z from /parrot1/world_pose) ---
+// Keep kManualTakeoffAltitude equal to patrol_node's cruise_altitude so the
+// drone doesn't change height when manual mode is released.
+constexpr double kManualTakeoffAltitude = 2.0; // m
+constexpr double kManualLandAltitude = 0.3;    // m, same as patrol_node land_altitude
+constexpr double kVerticalGain = 0.8;          // (m/s) per m of error
+constexpr double kVerticalMaxSpeed = 0.5;      // m/s
+constexpr double kVerticalTolerance = 0.15;    // m, "reached" band
+constexpr int kVerticalIntervalMs = 50;        // 20 Hz
 }
 
 // ============================================================
@@ -72,7 +84,7 @@ void SimulationWorker::initialize()
 
     m_cmdVelPub = m_node->create_publisher<geometry_msgs::msg::Twist>(kCmdVelTopic, 10);
 
-    // --- Integration subscriptions: message types are defined in INTEGRATION_NOTES.md ---
+    // --- Integration subscriptions ---
     m_worldPoseSub = m_node->create_subscription<geometry_msgs::msg::PoseStamped>(
         kWorldPoseTopic, 10,
         [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) { onWorldPoseMessage(msg); });
@@ -95,6 +107,10 @@ void SimulationWorker::initialize()
         kDeterrentStatusTopic, 10, [this](const std_msgs::msg::Bool::SharedPtr msg) {
             emit deterrentDeployedChanged(msg->data);
         });
+    m_droneStatusSub = m_node->create_subscription<std_msgs::msg::String>(
+        kDroneStatusTopic, 10, [this](const std_msgs::msg::String::SharedPtr msg) {
+            emit droneStatusChanged(QString::fromStdString(msg->data));
+        });
 
     // --- Integration command publishers ---
     m_takeoffPub = m_node->create_publisher<std_msgs::msg::Empty>(kTakeoffTopic, 10);
@@ -113,6 +129,11 @@ void SimulationWorker::initialize()
     m_rosSpinTimer = new QTimer(this);
     connect(m_rosSpinTimer, &QTimer::timeout, this, &SimulationWorker::spinRos);
     m_rosSpinTimer->start(kRosSpinIntervalMs);
+
+    // Manual takeoff/land controller; only runs while a climb/descent is active.
+    m_verticalTimer = new QTimer(this);
+    m_verticalTimer->setInterval(kVerticalIntervalMs);
+    connect(m_verticalTimer, &QTimer::timeout, this, &SimulationWorker::verticalTick);
 
     emit droneNameChanged("DRN-01");
     emit initialized();
@@ -154,6 +175,8 @@ void SimulationWorker::onWorldPoseMessage(const geometry_msgs::msg::PoseStamped:
 {
     // This topic contract requires positions expressed in the Gazebo world frame.
     // Do not feed /parrot1/odom directly into the map: its frame is parrot1_odom.
+    m_currentZ = msg->pose.position.z;
+    m_haveZ = true;
     emit dronePositionChanged(msg->pose.position.x, msg->pose.position.y);
 }
 
@@ -270,6 +293,23 @@ void SimulationWorker::onMoveRequested(double forward, double right, double up, 
         qDebug() << "[SimulationWorker] move ignored: not in manual mode";
         return;
     }
+
+    m_inForward = forward;
+    m_inRight = right;
+    m_inYaw = yawRate;
+
+    if (!std::isnan(m_verticalTarget)) {
+        if (up != 0.0) {
+            // Operator pressed Up/Down: they take over altitude again.
+            stopManualVertical();
+            emit droneStatusChanged("MANUAL: " + m_verticalLabel + " cancelled by operator");
+        } else {
+            // Takeoff/land in progress: verticalTick() publishes the
+            // combined command (operator x/y/yaw + controller z).
+            return;
+        }
+    }
+
     qDebug() << "[SimulationWorker] move" << forward << right << up << yawRate;
     publishVelocity(forward, right, up, yawRate);
 }
@@ -279,15 +319,24 @@ void SimulationWorker::onMoveRequested(double forward, double right, double up, 
 // ============================================================
 void SimulationWorker::publishVelocity(double forward, double right, double up, double yawRate)
 {
+    publishTwist(forward, right, up * kMaxLinearSpeed, yawRate);
+}
+
+// ============================================================
+// PUBLISH TWIST
+// ============================================================
+void SimulationWorker::publishTwist(double forward, double right, double verticalSpeed, double yawRate)
+{
     if (!m_cmdVelPub)
         return; // ROS node not up yet
 
     // GUI inputs run from -1 to 1 (yaw positive = turn right). ROS uses +y LEFT
     // and positive angular z = turn LEFT, so right and yaw are flipped here.
+    // verticalSpeed is already in m/s.
     geometry_msgs::msg::Twist msg;
     msg.linear.x = forward * kMaxLinearSpeed;
     msg.linear.y = -right * kMaxLinearSpeed;
-    msg.linear.z = up * kMaxLinearSpeed;
+    msg.linear.z = verticalSpeed;
     msg.angular.z = -yawRate * kMaxAngularSpeed;
     m_cmdVelPub->publish(msg);
 }
@@ -305,6 +354,53 @@ void SimulationWorker::publishManualMode(bool manual)
     m_manualModePub->publish(msg);
 }
 
+// ============================================================
+// START / STOP MANUAL VERTICAL (takeoff / land in manual mode)
+// ============================================================
+void SimulationWorker::startManualVertical(double targetZ, const QString &label)
+{
+    if (!m_haveZ) {
+        qWarning() << "[SimulationWorker] manual" << label
+                   << "needs altitude from" << kWorldPoseTopic << "- is world_pose_publisher running?";
+        emit droneStatusChanged("MANUAL: " + label + " FAILED (no altitude data)");
+        return;
+    }
+    m_verticalTarget = targetZ;
+    m_verticalLabel = label;
+    emit droneStatusChanged(QString("MANUAL: %1 to %2 m").arg(label).arg(targetZ, 0, 'f', 1));
+    m_verticalTimer->start();
+}
+
+void SimulationWorker::stopManualVertical()
+{
+    if (m_verticalTimer)
+        m_verticalTimer->stop();
+    m_verticalTarget = NAN;
+}
+
+// ============================================================
+// VERTICAL TICK
+// ============================================================
+void SimulationWorker::verticalTick()
+{
+    if (!m_manualMode || std::isnan(m_verticalTarget)) {
+        stopManualVertical();
+        return;
+    }
+
+    const double err = m_verticalTarget - m_currentZ;
+    if (std::abs(err) < kVerticalTolerance) {
+        publishTwist(m_inForward, m_inRight, 0.0, m_inYaw); // stop climbing/sinking
+        const QString done = (m_verticalLabel == "landing") ? "landed" : "takeoff complete";
+        emit droneStatusChanged(QString("MANUAL: %1 (%2 m)").arg(done).arg(m_currentZ, 0, 'f', 1));
+        stopManualVertical();
+        return;
+    }
+
+    const double vz = std::clamp(kVerticalGain * err, -kVerticalMaxSpeed, kVerticalMaxSpeed);
+    publishTwist(m_inForward, m_inRight, vz, m_inYaw);
+}
+
 
 // ============================================================
 // ON TAKEOFF REQUESTED
@@ -312,7 +408,10 @@ void SimulationWorker::publishManualMode(bool manual)
 void SimulationWorker::onTakeoffRequested()
 {
     qDebug() << "[SimulationWorker] publishing takeoff request";
+    // Always tell patrol_node (in manual mode it just records it).
     if (m_takeoffPub) m_takeoffPub->publish(std_msgs::msg::Empty{});
+    if (m_manualMode)
+        startManualVertical(kManualTakeoffAltitude, "takeoff");
 }
 
 // ============================================================
@@ -322,6 +421,8 @@ void SimulationWorker::onLandRequested()
 {
     qDebug() << "[SimulationWorker] publishing land request";
     if (m_landPub) m_landPub->publish(std_msgs::msg::Empty{});
+    if (m_manualMode)
+        startManualVertical(kManualLandAltitude, "landing");
 }
 
 // ============================================================
@@ -339,10 +440,9 @@ void SimulationWorker::onReturnToHomeRequested()
 void SimulationWorker::onEmergencyStopRequested()
 {
     qDebug() << "[SimulationWorker] publishing emergency-stop request and zero velocity";
+    stopManualVertical();
     if (m_emergencyStopPub) m_emergencyStopPub->publish(std_msgs::msg::Empty{});
-    // The simulation-side subscriber must implement and validate the safe response.
     publishVelocity(0.0, 0.0, 0.0, 0.0);
-    // No landing request is sent until the simulation supports one.
 }
 
 // ============================================================
@@ -352,6 +452,8 @@ void SimulationWorker::onManualModeChanged(bool active)
 {
     qDebug() << "[SimulationWorker] manual mode active:" << active;
     m_manualMode = active;
+    stopManualVertical();
+    m_inForward = m_inRight = m_inYaw = 0.0;
     if (active) {
         // Tell the automatic movement code to go quiet, then cancel whatever
         // it last commanded so the drone does not keep flying the old command.
@@ -362,5 +464,4 @@ void SimulationWorker::onManualModeChanged(bool active)
         publishVelocity(0.0, 0.0, 0.0, 0.0);
         publishManualMode(false);
     }
-    // Autonomous controller must subscribe to /manual_mode to honor this flag.
 }

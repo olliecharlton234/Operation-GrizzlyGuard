@@ -25,6 +25,12 @@ TelemetryPanel::TelemetryPanel(QWidget *parent)
 
     // --- Drone identity ---
     m_nameLabel = new QLabel("Drone: --");
+    auto *statusBox = new QGroupBox("Drone Activity");
+    auto *statusLayout = new QVBoxLayout(statusBox);
+    m_statusLabel = new QLabel("Awaiting data");
+    m_statusLabel->setWordWrap(true);
+    statusLayout->addWidget(m_statusLabel);
+    layout->addWidget(statusBox);
     QFont nameFont = m_nameLabel->font();
     nameFont.setPointSize(nameFont.pointSize() + 2);
     nameFont.setBold(true);
@@ -51,7 +57,7 @@ TelemetryPanel::TelemetryPanel(QWidget *parent)
     m_batteryTimer = new QTimer(this);
     connect(m_batteryTimer, &QTimer::timeout,
             this, &TelemetryPanel::updateBatteryLevel);
-    m_batteryTimer->start(18000);
+    m_batteryTimer->start(60000);
 
     // --- Perimeter status ---
     auto *perimeterBox = new QGroupBox("Bear Perimeter Status");
@@ -125,4 +131,11 @@ void TelemetryPanel::setDeterrentDeployed(bool deployed)
 {
     m_deterrentIndicator->setDeployed(deployed);
     m_deterrentLabel->setText(deployed ? "Deployed" : "Not deployed");
+}
+
+void TelemetryPanel::setDroneStatus(const QString &status)
+{
+    m_statusLabel->setText(status);
+    const bool bad = status.contains("FAILED") || status.startsWith("EMERGENCY");
+    m_statusLabel->setStyleSheet(bad ? "color: #c62828; font-weight: bold;" : "");
 }

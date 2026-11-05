@@ -52,6 +52,7 @@ signals:
     void deterrentDeployedChanged(bool deployed);
     void perimeterStatusChanged(int status);
     void perimeterAlertReceived(const QString &message);
+    void droneStatusChanged(const QString &status);
 
     // True once SimulationWorker::initialized() fires (the ROS2 node is up).
     void connectionStatusChanged(bool connected);

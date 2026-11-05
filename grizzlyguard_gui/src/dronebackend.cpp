@@ -35,6 +35,7 @@ DroneBackend::DroneBackend(QObject *parent)
     connect(m_worker, &SimulationWorker::deterrentDeployedChanged, this, &DroneBackend::deterrentDeployedChanged);
     connect(m_worker, &SimulationWorker::perimeterStatusChanged, this, &DroneBackend::perimeterStatusChanged);
     connect(m_worker, &SimulationWorker::perimeterAlertReceived, this, &DroneBackend::perimeterAlertReceived);
+    connect(m_worker, &SimulationWorker::droneStatusChanged, this, &DroneBackend::droneStatusChanged);
 }
 
 // ============================================================

@@ -3,6 +3,8 @@
 // Qt / ROS 2 GUI implementation
 // ============================================================
 
+// connect this to NAV
+
 #include "mapwidget.h"
 
 #include <QDialog>
