@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Start the whole system for one test scenario with one command.
+
+  ros2 launch grizzlyguard_decision scenario.launch.py scenario:=yellow
+  ros2 launch grizzlyguard_decision scenario.launch.py scenario:=red gui:=true
+
+scenario: no_bear, green, yellow, red, emergency, not_a_bear, or none for all four
+          bears walking normally. The e-stop, return-home and manual scenarios run
+          on top of any of these, using the GUI buttons.
+
+bear_custom.onnx must be in grizzlyguard_perception/models/ before building.
+"""
+import os
+
+from ament_index_python.packages import get_package_prefix, get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import (DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription,
+                            OpaqueFunction, TimerAction)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+# People are the only "not a bear" the trained model can't see, so the not_a_bear
+# scenario also runs the standard model looking for class "person".
+PERSON_MODEL = 'yolo26n.onnx'
+
+
+def _setup(context):
+    get = lambda name: LaunchConfiguration(name).perform(context)
+    scenario = get('scenario')
+    sim_time = {'use_sim_time': True}
+    bringup = get_package_share_directory('41068_ignition_bringup')
+    perception = get_package_share_directory('grizzlyguard_perception')
+
+    actions = [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(bringup, 'launch', '41068_ignition_parrot.launch.py')),
+        launch_arguments={'slam': 'true', 'nav2': 'true', 'rviz': get('rviz'),
+                          'world': 'yellowstone'}.items())]
+
+    # Started after the drone has spawned. patrol_node then waits for Nav2 itself.
+    delayed = [
+        Node(package='grizzlyguard_navigation', executable='altitude_controller',
+             name='altitude_controller', namespace='parrot1', output='screen',
+             remappings=[('cmd_vel_nav', 'cmd_vel'), ('cmd_vel', 'cmd_vel_gz')],
+             parameters=[sim_time, {'min_altitude': 0.2}]),
+        Node(package='grizzlyguard_navigation', executable='patrol_node.py', name='patrol_node',
+             output='screen', parameters=[sim_time, {'route': get('route')}]),
+        Node(package='grizzlyguard_navigation', executable='world_pose_publisher.py',
+             name='world_pose_publisher', output='screen', parameters=[sim_time]),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(perception, 'launch', 'bear_yolo.launch.py')),
+            launch_arguments={'model_path': get('model')}.items()),
+        Node(package='grizzlyguard_decision', executable='bear_response_node.py',
+             name='bear_response_node', output='screen', parameters=[sim_time]),
+    ]
+    if scenario == 'not_a_bear':
+        delayed.append(Node(
+            package='grizzlyguard_perception', executable='bear_yolo_node',
+            name='person_yolo_node', namespace='parrot1', output='screen',
+            remappings=[('bear_detections', 'nonbear_detections'),
+                        ('bear_detected', 'nonbear_detected'),
+                        ('bear_detections/image', 'nonbear_detections/image')],
+            parameters=[os.path.join(perception, 'config', 'bear_yolo.yaml'), sim_time,
+                        {'model_path': PERSON_MODEL, 'target_class': 'person'}]))
+    if get('gui').lower() == 'true':
+        # The GUI is plain CMake, not a ROS package, so its program stays in the build folder.
+        workspace = os.path.dirname(os.path.dirname(get_package_prefix('grizzlyguard_decision')))
+        program = os.path.join(workspace, 'build', 'grizzlyguard_gui', 'BearDroneGUI')
+        if not os.path.exists(program):
+            raise RuntimeError(f'{program} not found: run colcon build --packages-select grizzlyguard_gui')
+        delayed.append(ExecuteProcess(cmd=[program], output='screen'))
+    # The bears go first: they start at their world positions until the script moves
+    # or hides them, and YOLO must not react to that. Run directly, not as a Node,
+    # because the script has its own arguments and rejects ROS ones.
+    start = float(get('start_delay'))
+    actions.append(TimerAction(period=start, actions=[ExecuteProcess(
+        cmd=['ros2', 'run', '41068_ignition_bringup', 'bear_gait_demo.py', '--duration', '7200']
+        + ([] if scenario == 'none' else ['--scenario', scenario]),
+        output='screen')]))
+    actions.append(TimerAction(period=start + 6.0, actions=delayed))
+    return actions
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        DeclareLaunchArgument('scenario', default_value='none',
+                              description='no_bear, green, yellow, red, emergency, not_a_bear or none'),
+        DeclareLaunchArgument('route', default_value='short_route', description='Patrol route'),
+        DeclareLaunchArgument('model', default_value='bear_custom.onnx', description='YOLO bear model'),
+        DeclareLaunchArgument('rviz', default_value='false', description='Open RViz'),
+        DeclareLaunchArgument('gui', default_value='false', description='Open the team GUI'),
+        DeclareLaunchArgument('start_delay', default_value='15.0',
+                              description='Seconds to let the drone spawn first'),
+        OpaqueFunction(function=_setup),
+    ])

@@ -13,6 +13,8 @@ GUI interface (all topics are absolute):
   SUB /drone/land             std_msgs/Empty stop and descend in place
   SUB /drone/return_to_home   std_msgs/Empty stop patrol, fly to the spawn point, hover
   SUB /drone/emergency_stop   std_msgs/Empty highest priority: cancel everything, descend in place
+  SUB /drone/follow           std_msgs/Bool  true = pause the patrol while decision making steers the
+                              drone; false, or no message for follow_timeout s, resumes the patrol
   PUB /drone/status           std_msgs/String current mode / activity for the GUI
 
 In MANUAL mode the GUI flies takeoff/land itself (it owns /cmd_vel). This node
@@ -64,6 +66,7 @@ class PatrolRoute(Enum):
 
 class Mode(Enum):
     IDLE = 'IDLE'                 # hovering, waiting for takeoff / a command
+    FOLLOW = 'FOLLOW'             # patrol paused, staying near a bear
     TAKEOFF = 'TAKEOFF'
     PATROL = 'PATROL'
     MANUAL = 'MANUAL'
@@ -89,6 +92,7 @@ def main():
     # false = if takeoff can't confirm altitude (e.g. 2D plugin, no z odometry),
     # patrol anyway in 2D instead of stopping in IDLE.
     strict_alt = bool(nav.declare_parameter('strict_altitude', True).value)
+    follow_timeout = float(nav.declare_parameter('follow_timeout', 5.0).value)
 
     # ---------------- ROS interfaces ----------------
     alt_pub = nav.create_publisher(Float64, 'target_altitude', 10)       # /parrot1/target_altitude
@@ -114,6 +118,17 @@ def main():
     nav.create_subscription(Empty, '/drone/emergency_stop', flag('estop'), 10)
     nav.create_subscription(Bool, 'altitude_reached',                    # /parrot1/altitude_reached
                             lambda m: alt.update(reached=m.data), 10)
+
+    # Set by decision making while a bear needs following.
+    follow = {'on': False, 'at': 0.0}
+
+    def on_follow(msg):
+        follow.update(on=msg.data, at=time.monotonic())
+
+    def following():
+        return follow['on'] and time.monotonic() - follow['at'] < follow_timeout
+
+    nav.create_subscription(Bool, '/drone/follow', on_follow, 10)
 
     last_status = {'text': None}
 
@@ -230,6 +245,8 @@ def main():
                 mode = Mode.TAKEOFF
             else:
                 log.info(f'Takeoff ignored: already {mode.value}')
+        elif mode == Mode.PATROL and following():
+            mode = Mode.FOLLOW
 
         # ---- Run the current mode ----
         if mode == Mode.MANUAL:
@@ -334,6 +351,16 @@ def main():
             resume, forward = 0, True         # next patrol starts from the beginning
             mode = Mode.IDLE
 
+        elif mode == Mode.FOLLOW:
+            # Nav2 stays quiet here: decision making steers the drone towards the
+            # bear through altitude_controller, which keeps the camera on it.
+            send_altitude(cruise_z)
+            status('FOLLOW: following bear')
+            spin(0.2)
+            if not following():
+                status('FOLLOW: resuming patrol')
+                mode = Mode.PATROL
+
         elif mode == Mode.PATROL:
             pts = waypoints if forward else list(reversed(waypoints))
             if route_type == 'loop':
@@ -348,7 +375,7 @@ def main():
             reached = 0
             stopped = False
             while not nav.isTaskComplete():
-                if interrupted():
+                if interrupted() or following():
                     nav.cancelTask()
                     stopped = True
                     break
