@@ -3,6 +3,7 @@
 
   ros2 launch grizzlyguard_decision scenario.launch.py scenario:=yellow
   ros2 launch grizzlyguard_decision scenario.launch.py scenario:=red gui:=true
+  ros2 launch grizzlyguard_decision scenario.launch.py scenario:=red viewer:=false
 
 scenario: no_bear, green, yellow, red, emergency, not_a_bear, or none for all four
           bears walking normally. The e-stop, return-home and manual scenarios run
@@ -62,6 +63,10 @@ def _setup(context):
                     ('bear_detections/image', 'nonbear_detections/image')],
         parameters=[os.path.join(perception, 'config', 'bear_yolo.yaml'), sim_time,
                     {'model_path': PERSON_MODEL, 'target_class': 'person'}]))
+    if get('viewer').lower() == 'true':
+        # Shows the drone's camera with YOLO's boxes drawn on.
+        delayed.append(Node(package='rqt_image_view', executable='rqt_image_view', name='yolo_viewer',
+                            arguments=['/parrot1/bear_detections/image'], output='log'))
     if get('gui').lower() == 'true':
         # The GUI is plain CMake, not a ROS package, so its program stays in the build folder.
         workspace = os.path.dirname(os.path.dirname(get_package_prefix('grizzlyguard_decision')))
@@ -89,6 +94,7 @@ def generate_launch_description():
         DeclareLaunchArgument('model', default_value='bear_custom.onnx', description='YOLO bear model'),
         DeclareLaunchArgument('rviz', default_value='false', description='Open RViz'),
         DeclareLaunchArgument('gui', default_value='false', description='Open the team GUI'),
+        DeclareLaunchArgument('viewer', default_value='true', description="Show YOLO's boxes"),
         DeclareLaunchArgument('start_delay', default_value='15.0',
                               description='Seconds to let the drone spawn first'),
         OpaqueFunction(function=_setup),
