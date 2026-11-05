@@ -71,4 +71,3 @@ ros2 run grizzlyguard_navigation patrol_node.py --ros-args -p route:=long_route
 
 
 
-

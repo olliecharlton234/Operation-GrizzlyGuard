@@ -15,6 +15,11 @@ GUI interface (all topics are absolute):
   SUB /drone/emergency_stop   std_msgs/Empty highest priority: cancel everything, descend in place
   PUB /drone/status           std_msgs/String current mode / activity for the GUI
 
+In MANUAL mode the GUI flies takeoff/land itself (it owns /cmd_vel). This node
+only records them for when manual mode ends:
+  last button land    -> stay IDLE (landed) until Takeoff is pressed
+  last button takeoff -> climb to cruise and rejoin the patrol route
+
 Priority when several requests arrive together:
   EMERGENCY > MANUAL > LAND > RETURN_HOME > TAKEOFF
 
@@ -192,6 +197,23 @@ def main():
             if mode != Mode.MANUAL:
                 before_manual = mode
                 mode = Mode.MANUAL
+            # In manual mode the GUI flies takeoff/land itself. Consume the
+            # requests here so they don't run again when manual mode ends,
+            # and leave altitude_controller a target that matches what the
+            # operator did (it resumes from this target on release).
+            if req['land']:
+                req['land'] = False
+                send_altitude(land_z)
+                before_manual = Mode.IDLE     # stay down after manual ends
+                log.info('Manual land: will stay IDLE on release')
+            if req['takeoff']:
+                req['takeoff'] = False
+                send_altitude(cruise_z)
+                # Same as an automatic takeoff: rejoin the route on release,
+                # from the waypoint it was heading to when it was interrupted.
+                if before_manual in (Mode.IDLE, Mode.LANDING, Mode.TAKEOFF):
+                    before_manual = Mode.PATROL
+                log.info('Manual takeoff: will rejoin the patrol route on release')
         elif mode == Mode.MANUAL:
             # Operator released control: resume what we were doing.
             log.info(f'Manual released - resuming {before_manual.value}')
@@ -211,7 +233,10 @@ def main():
 
         # ---- Run the current mode ----
         if mode == Mode.MANUAL:
-            status('MANUAL')
+            # Publish once on entry only, so the GUI's own manual takeoff/land
+            # messages on /drone/status aren't overwritten every 0.2 s.
+            if last_status['text'] != 'MANUAL':
+                status('MANUAL')
             spin(0.2)
 
         elif mode == Mode.IDLE:
