@@ -143,7 +143,7 @@ SCENARIOS = {
     'green': {'bear_walk': [(35.0, 32.0), (31.0, 36.0), (35.0, 37.0)]},       # 46-51 m
     'yellow': {'bear_walk': [(18.4, 15.4), (23.5, 18.7), (20.2, 18.0)]},  # 24-30 m
     'red': {'bear_walk': [(11.5, 6.0), (12.5, -2.0), (13.0, 2.0)]},           # 11-14 m
-    'emergency': {'bear_walk': [(5.0, 1.0), (1.0, 5.0), (8.0, -2.0)]},        # 3-9 m
+    'emergency': {'bear_walk': [(6.0, 1.0), (8.0, -2.0), (7.0, 3.0)]},        # 6-9 m, in front of the drone's start
 }
 HIDE_Z = -50.0       # m, far enough under the ground that no sensor can see it
 
