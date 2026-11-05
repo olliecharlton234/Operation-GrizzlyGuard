@@ -135,12 +135,13 @@ WORLD_BOUNDS = (-72.0, 72.0, -37.0, 232.0)                # x0, x1, y0, y1, 3 m 
 
 # Test cases: which bears walk, and where. Each loop stays inside one threat zone
 # (distance from town), on the east side where short_route passes, and keeps
-# clear of trees. Any bear not listed is hidden underground.
+# clear of trees. yellow also has a clear lane out to green, or the bear goes out
+# of sight behind a tree. Any bear not listed is hidden underground.
 SCENARIOS = {
     'no_bear': {},
     'not_a_bear': {},
     'green': {'bear_walk': [(35.0, 32.0), (31.0, 36.0), (35.0, 37.0)]},       # 46-51 m
-    'yellow': {'bear_walk': [(23.0, 4.0), (28.0, 7.0), (27.0, 2.0)]},         # 23-29 m
+    'yellow': {'bear_walk': [(18.4, 15.4), (23.5, 18.7), (20.2, 18.0)]},  # 24-30 m
     'red': {'bear_walk': [(11.5, 6.0), (12.5, -2.0), (13.0, 2.0)]},           # 11-14 m
     'emergency': {'bear_walk': [(5.0, 1.0), (1.0, 5.0), (8.0, -2.0)]},        # 3-9 m
 }

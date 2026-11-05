@@ -57,6 +57,10 @@ FIXES_KEPT = 3            # positions are the median of this many, to steady the
 FIXES_TO_CHANGE = 3       # sightings in a new zone before believing it, so one false
 CONFIRM_WITHIN_S = 6.0    # box can't trigger a response; they must be this close in time
 FOLLOW_GAP_M = 4.0        # how far from the bear the drone tries to stay
+# YOLO tends to lose a bear walking away near the green line, so get closer there to
+# make it look bigger in the camera and see it cross.
+NEAR_GREEN_M = 33.0       # bear this far from town counts as nearing the green line
+NEAR_GREEN_GAP_M = 3.0    # how far from the bear to stay while it does
 MAX_SPEED = 1.5           # m/s, enough to keep up with a sprayed bear
 TRACK_WINDOW_S = 4.0      # seconds of sightings used to judge the bear's velocity
 PREDICT_FOR_S = 8.0       # how long to assume it keeps walking when it isn't seen
@@ -287,9 +291,11 @@ class BearResponseNode(Node):
         seen_recently = self.odom[-1][0] - self.last_seen < SEARCH_AFTER_S
         if abs(err) < FACING_RAD and seen_recently and self.clear_ahead > STOP_DISTANCE_M:
             dist = math.hypot(dx, dy)
+            near_green = NEAR_GREEN_M <= distance_to_border_m(*self.bear)
+            gap = NEAR_GREEN_GAP_M if near_green else FOLLOW_GAP_M
             # Match the bear's speed away from the drone, then close the remaining gap.
             walking_away = (vx*dx + vy*dy) / dist if dist > 1e-3 else 0.0
-            cmd.linear.x = max(0.0, min(MAX_SPEED, walking_away + 1.0*(dist - FOLLOW_GAP_M)))
+            cmd.linear.x = max(0.0, min(MAX_SPEED, walking_away + 1.0*(dist - gap)))
         self.cmd_pub.publish(cmd)
 
     def bear_velocity(self):
