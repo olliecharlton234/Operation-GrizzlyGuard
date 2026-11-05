@@ -52,6 +52,15 @@ on /bear_deterrent holding the bear's name and optionally the deterrent:
 
 or, without ROS, at a set time: bear_gait_demo.py --deter 'bear_spawn:spray@30'
 
+Scenarios
+---------
+--scenario sets up one test case: one bear walking inside the zone under test
+(SCENARIOS below), and every other bear hidden underground so nothing else can
+be detected. no_bear and not_a_bear hide them all; the hikers are the only thing
+left to see in not_a_bear.
+
+  bear_gait_demo.py --scenario yellow
+
 Everything is <static> and moved by set_pose, so no physics is involved.
 """
 import argparse
@@ -123,6 +132,20 @@ SAFE_MARGIN = 5.0    # m past the green line before the bear settles again
 # Spray scares a bear more than sound, so it leaves faster.
 FLEE = {'sound': ('walk', 0.7), 'spray': ('trot', 1.1)}   # gait, m/s
 WORLD_BOUNDS = (-72.0, 72.0, -37.0, 232.0)                # x0, x1, y0, y1, 3 m in from the edge
+
+# Test cases: which bears walk, and where. Each loop stays inside one threat zone
+# (distance from town), on the east side where short_route passes, and keeps
+# clear of trees. yellow also has a clear lane out to green, or the bear goes out
+# of sight behind a tree. Any bear not listed is hidden underground.
+SCENARIOS = {
+    'no_bear': {},
+    'not_a_bear': {},
+    'green': {'bear_walk': [(32.0, 32.0), (28.0, 36.0), (32.0, 37.0)]},       # 44-49 m
+    'yellow': {'bear_walk': [(18.4, 15.4), (23.5, 18.7), (20.2, 18.0)]},  # 24-30 m
+    'red': {'bear_walk': [(11.5, 6.0), (12.5, -2.0), (13.0, 2.0)]},           # 11-14 m
+    'emergency': {'bear_walk': [(6.0, 1.0), (8.0, -2.0), (7.0, 3.0)]},        # 6-9 m, in front of the drone's start
+}
+HIDE_Z = -50.0       # m, far enough under the ground that no sensor can see it
 
 
 # =============================================================================
@@ -390,12 +413,23 @@ def apply_deterrent(text, walkers):
         print(f'  {name}: {kind}! heading away from town to ({fx:.0f}, {fy:.0f})', flush=True)
 
 
+# Used by --scenario, so the only bear the drone can see is the one being tested.
+def hide_bears(names, out):
+    """Park bears underground. Re-sent regularly in case Gazebo started late."""
+    for name in names:
+        parts = [f'bear_walk_{p}' for p in ('body', *HIPS)] if name == 'bear_walk' else [name]
+        for part in parts:
+            out.write(f'{part} 0 0 {HIDE_Z} 0 0 0 1\n')
+
+
 # =============================================================================
 # MAIN PROGRAM - sets everything up, then runs the 30-times-a-second loop
 # =============================================================================
 def main():
     # The command-line options.
     ap = argparse.ArgumentParser()
+    ap.add_argument('--scenario', default=None, choices=sorted(SCENARIOS),
+                    help='one test case: one bear in that zone, the others hidden')
     ap.add_argument('--duration', type=float, default=600.0)
     ap.add_argument('--only', default=None, help='comma-separated bear names')
     ap.add_argument('--goals', default='',
@@ -405,9 +439,12 @@ def main():
                     help="deter bears at set times: 'bear_spawn:spray@30,bear_walk@60'")
     a = ap.parse_args()
 
-    # Work out which bears walk and where. --goals overrides the normal BEARS list.
-    bears = {**BEARS, **parse_goals(a.goals)}
-    names = a.only.split(',') if a.only else list(BEARS)
+    # Work out which bears walk and where. Later entries win, so --goals overrides
+    # the scenario, which overrides the normal BEARS list.
+    scenario = SCENARIOS.get(a.scenario, {})
+    bears = {**BEARS, **scenario, **parse_goals(a.goals)}
+    names = a.only.split(',') if a.only else list(scenario if a.scenario else BEARS)
+    hidden = [b for b in BEARS if b not in names] if a.scenario else []
     walkers = {n: GoalWalker(bears[n], seed=a.seed*1000 + i) for i, n in enumerate(names)}
     # Two sources of scares: timed ones from --deter, and live ROS messages.
     scheduled = deque(parse_deter(a.deter))
@@ -425,6 +462,9 @@ def main():
         # THE LOOP. Each pass is one tick.
         for i in range(n):
             t = i*dt
+            # Once a second, make sure hidden bears are still hidden.
+            if i % int(RATE) == 0:
+                hide_bears(hidden, out)
             # Handle any scares that are due, before the bears take their step.
             while scheduled and scheduled[0][0] <= t:
                 inbox.append(scheduled.popleft()[1])
