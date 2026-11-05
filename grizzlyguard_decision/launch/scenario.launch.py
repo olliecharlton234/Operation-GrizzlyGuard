@@ -39,14 +39,21 @@ def _setup(context):
         launch_arguments={'slam': 'true', 'nav2': 'true', 'rviz': get('rviz'),
                           'world': 'yellowstone'}.items())]
 
-    # Started after the drone has spawned. patrol_node then waits for Nav2 itself.
+    # Started after the drone has spawned.
     delayed = [
         Node(package='grizzlyguard_navigation', executable='altitude_controller',
              name='altitude_controller', namespace='parrot1', output='screen',
              remappings=[('cmd_vel_nav', 'cmd_vel'), ('cmd_vel', 'cmd_vel_gz')],
              parameters=[sim_time, {'min_altitude': 0.2}]),
-        Node(package='grizzlyguard_navigation', executable='patrol_node.py', name='patrol_node',
-             output='screen', parameters=[sim_time, {'route': get('route')}]),
+        # Wait for Nav2 first. Started earlier, patrol_node's status check can go unanswered
+        # and it then sits on WAITING FOR NAV2 forever.
+        ExecuteProcess(
+            cmd=['bash', '-c',
+                 'until timeout 5 ros2 lifecycle get /parrot1/bt_navigator 2>/dev/null | grep -q active; '
+                 'do sleep 2; done; '
+                 f'exec ros2 run grizzlyguard_navigation patrol_node.py --ros-args '
+                 f'-p route:={get("route")} -p use_sim_time:=true'],
+            output='screen'),
         Node(package='grizzlyguard_navigation', executable='world_pose_publisher.py',
              name='world_pose_publisher', output='screen', parameters=[sim_time]),
         IncludeLaunchDescription(
