@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrizzlyGuard Scenarios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a field runbook; tabs across the top, one job per page, every command copyable, zone colours as the only strong colour. */
+:root {
+  --bg: #f2f4f1; --surface: #ffffff; --ink: #18211d; --muted: #566259; --line: #d4dbd5;
+  --accent: #1f5c4d; --accent-ink: #f3f8f5; --code: #eef1ed;
+  --z-green: #2f7d47; --z-yellow: #a87c00; --z-red: #bd3a2a; --z-emergency: #8a1c54; --warn-bg: #f7efd9; --warn-ink: #5e4700;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111613; --surface: #19201c; --ink: #e3e9e4; --muted: #9aa89f; --line: #2d3732;
+  --accent: #79c5ae; --accent-ink: #0e1512; --code: #212a25;
+  --z-green: #5fbd7a; --z-yellow: #e0b13a; --z-red: #ee6a5a; --z-emergency: #d65e9c; --warn-bg: #2d2714; --warn-ink: #ecd48c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #19201c; --ink: #e3e9e4; --muted: #9aa89f; --line: #2d3732;
+  --accent: #79c5ae; --accent-ink: #0e1512; --code: #212a25;
+  --z-green: #5fbd7a; --z-yellow: #e0b13a; --z-red: #ee6a5a; --z-emergency: #d65e9c; --warn-bg: #2d2714; --warn-ink: #ecd48c; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 17px/1.55 var(--f-body) }
+.pad { padding-left: 16px; padding-right: 16px }
+.inner { max-width: 960px; margin: 0 auto }
+.top { background: var(--surface); border-bottom: 1px solid var(--line) }
+.top .inner { padding-block: 24px 14px; display: grid; gap: 6px }
+.eyebrow { font: 600 13px var(--f-display); text-transform: uppercase; letter-spacing: .12em; color: var(--accent) }
+h1 { font: 800 clamp(30px, 5vw, 44px)/1.05 var(--f-display); margin: 0; letter-spacing: -.01em; text-wrap: balance }
+.sub { color: var(--muted); margin: 0; max-width: 66ch }
+nav { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line) }
+nav .inner { display: flex; gap: 2px; overflow-x: auto }
+nav a { flex: none; font: 600 15px var(--f-display); color: var(--muted); text-decoration: none; padding: 12px 12px 9px; border-bottom: 3px solid transparent }
+nav a:hover { color: var(--ink) }
+nav a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent) }
+nav a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
+main .inner { padding-block: 26px 56px }
+.page { display: grid; gap: 18px; min-width: 0 }
+h2 { font: 800 clamp(24px, 3.5vw, 30px)/1.15 var(--f-display); margin: 0; text-wrap: balance }
+h3 { font: 800 19px/1.25 var(--f-display); margin: 0 }
+p { margin: 0; max-width: 68ch }
+.muted { color: var(--muted) }
+ol, ul { margin: 0; padding-left: 22px; display: grid; gap: 6px; max-width: 70ch }
+code { font: 14px var(--f-mono); background: var(--code); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere }
+
+.cmd { display: flex; align-items: flex-start; gap: 10px; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0 }
+.cmd pre { flex: 1; min-width: 0; margin: 0; overflow-x: auto; font: 14px/1.55 var(--f-mono) }
+.copy { flex: none; font: 600 13px var(--f-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer }
+.out { background: var(--code); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font: 13px/1.6 var(--f-mono); margin: 0; color: var(--muted) }
+
+.scn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 12px; min-width: 0 }
+.scn-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; justify-content: space-between }
+.tag { font: 600 12.5px var(--f-body); padding: 2px 9px; border-radius: 99px; border: 1.5px solid currentColor }
+.ok { color: var(--z-green) } .mostly { color: var(--z-yellow) } .bad { color: var(--z-red) }
+.zone { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; vertical-align: 0 }
+.label { font: 600 12.5px var(--f-display); text-transform: uppercase; letter-spacing: .08em; color: var(--muted) }
+.block { display: grid; gap: 5px; min-width: 0 }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 10px 14px; font-size: 15.5px }
+.note code { background: transparent; padding: 0 }
+
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface) }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15.5px }
+th, td { text-align: left; padding: 9px 13px; border-bottom: 1px solid var(--line); vertical-align: top }
+tr:last-child td { border-bottom: 0 }
+th { font: 600 12.5px var(--f-display); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--code) }
+td code { white-space: nowrap }
+</style>
+
+<header class="top pad"><div class="inner">
+  <div class="eyebrow">Group 15 · Operation GrizzlyGuard</div>
+  <h1>How to run each scenario</h1>
+  <p class="sub">One command starts the sim, drone, patrol, YOLO, decision making and the bears. You choose which scenario to run.</p>
+</div></header>
+<nav class="pad" aria-label="Pages"><div class="inner" id="tabs">
+  <a href="#quick">Quick start</a>
+  <a href="#setup">First-time setup</a>
+  <a href="#scenarios">The scenarios</a>
+  <a href="#controls">GUI controls</a>
+  <a href="#problems">If it goes wrong</a>
+  <a href="#limits">Known limits</a>
+</div></nav>
+
+<main class="pad"><div class="inner">
+
+<section class="page" id="p-quick">
+  <h2>Quick start</h2>
+  <p>Already set up? Run this, changing the word after <code>scenario:=</code>. Use your own workspace folder if it's somewhere else.</p>
+  <div class="cmd"><pre id="q1">cd ~/RS1-Workspace/Operation-GrizzlyGuard
+source install/setup.bash
+ros2 launch grizzlyguard_decision scenario.launch.py scenario:=red</pre><button class="copy" type="button" data-c="q1">Copy</button></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Scenario</th><th>Type this</th><th>What it shows</th></tr></thead>
+    <tbody>
+      <tr><td>No bear</td><td><code>scenario:=no_bear</code></td><td>Normal patrol</td></tr>
+      <tr><td><span class="zone" style="background:var(--z-green)"></span>Green</td><td><code>scenario:=green</code></td><td>Bear noted, patrol continues</td></tr>
+      <tr><td><span class="zone" style="background:var(--z-yellow)"></span>Yellow</td><td><code>scenario:=yellow</code></td><td>Sound, follow to green, back to patrol</td></tr>
+      <tr><td><span class="zone" style="background:var(--z-red)"></span>Red</td><td><code>scenario:=red</code></td><td>Spray, changes to sound, follow to green</td></tr>
+      <tr><td><span class="zone" style="background:var(--z-emergency)"></span>Emergency</td><td><code>scenario:=emergency</code></td><td>Critical alert, follow the bear</td></tr>
+      <tr><td>Not a bear</td><td><code>scenario:=not_a_bear</code></td><td>Person reported, patrol continues</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">E-stop, return home and manual run on top of any scenario, from the GUI. See <a href="#controls">GUI controls</a>.</p>
+  <h3>After you press enter</h3>
+  <ol>
+    <li>Gazebo and the YOLO viewer open. The viewer window is called <code>rqt_image_view</code>, so check your taskbar if you can't see it.</li>
+    <li>Wait for the drone to take off. Nav2 takes about 30–60 seconds to start.</li>
+    <li>The drone hovers for 12 seconds to look for a bear, then starts its patrol.</li>
+    <li>Decision messages print in the terminal, mixed in with lots of other output. For a clean view, open a second terminal and run:</li>
+  </ol>
+  <div class="cmd"><pre id="q2">source /opt/ros/humble/setup.bash
+ros2 topic echo /perimeter/alert --field data</pre><button class="copy" type="button" data-c="q2">Copy</button></div>
+  <p>Press <b>Ctrl-C</b> in the launch terminal to stop, and wait for it to finish before starting another scenario.</p>
+  <h3>Options</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Add this</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>gui:=true</code></td><td>Opens the team GUI. It slows the camera a lot on a laptop, so only use it when you need it. See <a href="#setup">setup</a> for building it.</td></tr>
+      <tr><td><code>rviz:=true</code></td><td>Opens RViz to show the map and planned path.</td></tr>
+      <tr><td><code>viewer:=false</code></td><td>Doesn't open the YOLO viewer.</td></tr>
+      <tr><td><code>route:=long_route</code></td><td>Changes the patrol route. The scenarios are placed for <code>short_route</code>, the default, so another route may not pass the bear.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="page" id="p-setup" hidden>
+  <h2>First-time setup</h2>
+  <p>You only need to do this once per laptop.</p>
+  <h3>1. Get the code</h3>
+  <div class="cmd"><pre id="s1">cd ~/RS1-Workspace/Operation-GrizzlyGuard
+git fetch origin
+git switch main
+git pull</pre><button class="copy" type="button" data-c="s1">Copy</button></div>
+  <h3>2. Install what it needs</h3>
+  <div class="cmd"><pre id="s2">bash grizzlyguard_perception/scripts/install_onnxruntime.sh
+sudo apt update
+sudo apt install ros-humble-vision-msgs ros-humble-cv-bridge ros-humble-rqt-image-view
+sudo apt install --only-upgrade ros-humble-diagnostic-updater</pre><button class="copy" type="button" data-c="s2">Copy</button></div>
+  <p class="muted">The last line fixes a crash in <code>ekf_node</code> saying <code>libdiagnostic_updater.so</code> is missing. Without that fix, the drone can't navigate.</p>
+  <h3>3. Add the two YOLO models</h3>
+  <p>Models aren't stored in git, so put both of these in <code>grizzlyguard_perception/models/</code> <b>before you build</b>:</p>
+  <div class="tbl"><table>
+    <thead><tr><th>File</th><th>What it's for</th><th>Where to get it</th></tr></thead>
+    <tbody>
+      <tr><td><code>bear_custom.onnx</code></td><td>Oliver's trained bear model. YOLO won't start without it.</td><td>Oliver</td></tr>
+      <tr><td><code>yolo26n.onnx</code></td><td>The standard model, used to spot people. Without it, everything still runs, but hikers can set off false bear alarms.</td><td>Ask Mahak or Oliver, or make it with <code>scripts/export_yolo.py</code></td></tr>
+    </tbody>
+  </table></div>
+  <h3>4. Build</h3>
+  <div class="cmd"><pre id="s3">source /opt/ros/humble/setup.bash
+colcon build --symlink-install
+source install/setup.bash</pre><button class="copy" type="button" data-c="s3">Copy</button></div>
+  <h3>5. The GUI (only if you want it)</h3>
+  <p>Colcon no longer builds the GUI. You have two options:</p>
+  <ul>
+    <li><b>Qt Creator:</b> build and run it the usual way from the main README, alongside the launch command. Don't add <code>gui:=true</code>.</li>
+    <li><b>With <code>gui:=true</code>:</b> the launch file looks for the program in <code>build/grizzlyguard_gui/</code>, so build it there first, then rebuild it whenever the GUI code changes:</li>
+  </ul>
+  <div class="cmd"><pre id="s4">source /opt/ros/humble/setup.bash
+cmake -S grizzlyguard_gui -B build/grizzlyguard_gui
+cmake --build build/grizzlyguard_gui -j4</pre><button class="copy" type="button" data-c="s4">Copy</button></div>
+</section>
+
+<section class="page" id="p-scenarios" hidden>
+  <h2>The scenarios</h2>
+  <p>Zones are measured by how far the bear is from town at (0, 0): <span class="zone" style="background:var(--z-green)"></span>green over 40 m, <span class="zone" style="background:var(--z-yellow)"></span>yellow 15–40 m, <span class="zone" style="background:var(--z-red)"></span>red 10–15 m, <span class="zone" style="background:var(--z-emergency)"></span>emergency 10 m or less. In each scenario, one bear walks in that zone and the others are hidden underground.</p>
+  <p class="muted">Times are roughly how long after Nav2 started in our test runs. They vary from run to run.</p>
+
+  <article class="scn"><div class="scn-head"><h3>No bear</h3><span class="tag ok">Worked in its latest run</span></div>
+    <div class="cmd"><pre id="a">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=no_bear</pre><button class="copy" type="button" data-c="a">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><p>The drone takes off and patrols, with no follow and no deterrent. You'll still see "Person detected: not a bear" when it passes a hiker. That's correct, because hikers are on the map.</p></div>
+  </article>
+
+  <article class="scn"><div class="scn-head"><h3><span class="zone" style="background:var(--z-green)"></span>Green</h3><span class="tag ok">Worked in 4 of 4 latest runs</span></div>
+    <div class="cmd"><pre id="b">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=green</pre><button class="copy" type="button" data-c="b">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><p>The drone patrols. At around 80 seconds, it passes the bear, reports its location and <b>keeps patrolling</b> with no deterrent.</p></div>
+    <div class="block"><span class="label">In the terminal</span><pre class="out">Bear in Green zone at (32, 37): Normal
+Bear lost from view: returning to patrol</pre></div>
+    <p class="muted">The second line just means the drone has flown past. It didn't stop patrolling.</p>
+  </article>
+
+  <article class="scn"><div class="scn-head"><h3><span class="zone" style="background:var(--z-yellow)"></span>Yellow</h3><span class="tag ok">Latest 2 runs clean; 1 of 3 before that lost sight briefly</span></div>
+    <div class="cmd"><pre id="c">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=yellow</pre><button class="copy" type="button" data-c="c">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><ol>
+      <li>The drone patrols, and YOLO spots the bear at around 55–65 seconds.</li>
+      <li>The drone pauses its patrol and flies to within 10 m.</li>
+      <li>It plays the sound, and the bear walks away from town.</li>
+      <li>The drone follows until the bear reaches green, about 20–25 seconds later.</li>
+      <li>The deterrent stops and the patrol resumes.</li></ol></div>
+    <div class="block"><span class="label">In the terminal</span><pre class="out">Bear in Yellow zone at (22, 17): Yellow
+Deterrent deployed: sound
+Bear in Green zone at (32, 26): Normal
+Deterrent stopped</pre></div>
+    <p class="muted">Sometimes the drone loses sight first and you'll see "Bear lost from view". It goes back to patrol, and usually spots the bear in green moments later.</p>
+  </article>
+
+  <article class="scn"><div class="scn-head"><h3><span class="zone" style="background:var(--z-red)"></span>Red</h3><span class="tag ok">Latest 2 runs confirmed green; 1 earlier run ended on "lost"</span></div>
+    <div class="cmd"><pre id="d">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=red</pre><button class="copy" type="button" data-c="d">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><ol>
+      <li>The bear is near the drone's start, so this begins within about 10 seconds of takeoff, during the 12-second hover.</li>
+      <li>The drone sprays, and the bear walks away from town.</li>
+      <li>When the bear enters yellow, the deterrent changes to sound.</li>
+      <li>The drone follows until the bear reaches green, then goes back to patrol.</li></ol></div>
+    <div class="block"><span class="label">In the terminal</span><pre class="out">Bear in Red zone at (11, 4): High Priority
+Deterrent deployed: spray
+Bear in Yellow zone at (18, 2): Yellow
+Deterrent deployed: sound
+Bear in Green zone at (42, 6): Normal
+Deterrent stopped</pre></div>
+    <p class="muted">Green can get missed here too, ending with "Bear lost from view". The patrol still resumes.</p>
+  </article>
+
+  <article class="scn"><div class="scn-head"><h3><span class="zone" style="background:var(--z-emergency)"></span>Emergency</h3><span class="tag ok">Worked in 4 of 4 latest runs with the GUI</span></div>
+    <div class="cmd"><pre id="e">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=emergency gui:=true</pre><button class="copy" type="button" data-c="e">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><p>Within about 10–20 seconds of takeoff, the GUI opens a big red pop-up and the drone follows the bear. There's <b>no deterrent</b>, so the bear stays there and this <b>doesn't end by itself</b>. Stop it with Ctrl-C or the GUI's buttons.</p></div>
+    <div class="block"><span class="label">In the terminal</span><pre class="out">BREACH:7</pre></div>
+    <p class="muted">The number is how far the bear is from town. The pop-up says "left the perimeter", which isn't quite the right wording for this case.</p>
+  </article>
+
+  <article class="scn"><div class="scn-head"><h3>Not a bear</h3><span class="tag ok">Worked in 6 of 6 latest runs</span></div>
+    <div class="cmd"><pre id="f">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=not_a_bear</pre><button class="copy" type="button" data-c="f">Copy</button></div>
+    <div class="block"><span class="label">What should happen</span><p>All the bears are hidden and four hikers walk around the map. The drone reports people and <b>never stops patrolling</b>.</p></div>
+    <div class="block"><span class="label">In the terminal</span><pre class="out">Person detected: not a bear, continuing patrol</pre></div>
+    <p class="muted">It only recognises people, not other animals.</p>
+  </article>
+</section>
+
+<section class="page" id="p-controls" hidden>
+  <h2>GUI controls</h2>
+  <p>These work on top of any scenario, so start one with the GUI open, then use the buttons. They take priority over following a bear.</p>
+  <div class="cmd"><pre id="g">ros2 launch grizzlyguard_decision scenario.launch.py scenario:=no_bear gui:=true</pre><button class="copy" type="button" data-c="g">Copy</button></div>
+  <div class="tbl"><table>
+    <thead><tr><th>Button</th><th>What should happen</th><th>Tested</th></tr></thead>
+    <tbody>
+      <tr><td><b>EMERGENCY STOP</b></td><td>The drone descends to about 0.3 m and stays down, and an E-STOP message appears in the status bar. Press <b>Takeoff</b> to go again.</td><td><span class="ok">Worked 6 of 6</span>, using the same command the button sends</td></tr>
+      <tr><td><b>Manual Mode</b></td><td>The patrol pauses and you fly with the GUI's controls. Turn it off and the patrol resumes.</td><td><span class="ok">Handover and movement worked</span> using test commands. <span class="mostly">Try the GUI's own controls before relying on them.</span></td></tr>
+      <tr><td><b>Return to Home</b></td><td>The drone flies back towards its start and hovers.</td><td><span class="bad">Stops about 10 m from the start</span>, at the same spot every run. Cause not confirmed</td></tr>
+      <tr><td><b>Acknowledge</b></td><td>Closes the red pop-up.</td><td><span class="mostly">Pop-up seen, button not tested</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="page" id="p-problems" hidden>
+  <h2>If it goes wrong</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td>Drone sits on the ground for over a minute, status stuck on <code>WAITING FOR NAV2</code></td><td>Nav2 hung during startup. It happens now and then, and it didn't happen in the final 11 test launches, but keep this in mind. Press Ctrl-C and launch again.</td></tr>
+      <tr><td>No boxes showing</td><td>Find the <code>rqt_image_view</code> window on your taskbar. Its dropdown should say <code>/parrot1/bear_detections/image</code>. RViz's Camera panel shows the plain camera, with no boxes. Gazebo never shows boxes.</td></tr>
+      <tr><td>Viewer looks like a slideshow</td><td>That's normal. The whole system is heavy, so it may only update every second or so, and slower with the GUI open.</td></tr>
+      <tr><td><code>model file not found</code></td><td>Put the model in <code>grizzlyguard_perception/models/</code>, then run <code>colcon build --symlink-install</code> again.</td></tr>
+      <tr><td><code>ekf_node</code> crashes, or <code>libdiagnostic_updater.so</code> is missing</td><td>Run the last line from step 2 of <a href="#setup">setup</a>.</td></tr>
+      <tr><td><code>TAKEOFF FAILED</code></td><td>The altitude controller isn't running. The launch file starts it for you, so check you're using <code>scenario.launch.py</code>.</td></tr>
+      <tr><td>The drone sees the bear late, or not at all</td><td>Bears only get spotted within about 10–15 m, so stay on <code>short_route</code>, which the scenarios are placed for. Close the GUI if you don't need it, because it slows the camera.</td></tr>
+      <tr><td><code>gui:=true</code> says BearDroneGUI not found</td><td>Build the GUI first. See step 5 of <a href="#setup">setup</a>.</td></tr>
+      <tr><td>Old windows still open, or strange behaviour after stopping</td><td>Close everything, including old terminals, then launch again.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><b>Don't run these at the same time:</b> this launch file, <code>perimeter_status_node.py</code>, and <code>yellowstone_demo.launch.py</code> from the <code>integrated-demo</code> branch. They send the same messages and would fight over the GUI and the bears.</div>
+</section>
+
+<section class="page" id="p-limits" hidden>
+  <h2>Known limits</h2>
+  <ul>
+    <li><b>Small test counts.</b> The results here come from a few runs each on one laptop, so rehearse on the laptop you'll present from.</li>
+    <li><b>Return home</b> stops about 10 m from the start, at the same spot every run. That points to an offset between the drone's map and the world rather than random drift, but the cause isn't confirmed. Patrol routes may be offset the same way.</li>
+    <li><b>The drone can't go around trees while following.</b> It stops if one's in the way, and the bear can walk out of sight behind one. The scenario spots are chosen to avoid this, but a bear elsewhere on the map may not get the same result.</li>
+    <li><b>False boxes still happen.</b> YOLO sometimes boxes a tree near (26, 56), which can give a false green note. It takes three sightings to react, so most false boxes do nothing.</li>
+    <li><b>People, not animals.</b> The person check only recognises people. If it misses a person, a hiker could still set off a false bear alarm.</li>
+    <li><b>The scare goes to every bear.</b> YOLO can't tell bears apart, so "all" bears hear the deterrent. That's fine here, because each scenario has one bear out.</li>
+    <li><b>The GUI slows the camera,</b> which makes detection weaker. Emergency has a 12-second hover after takeoff to allow for this.</li>
+    <li><b>Zones are measured from town.</b> <code>patrol_routes.yaml</code> describes them from the drone to the nearest bear, and the team still needs to agree on one (Step 0 in the main README).</li>
+  </ul>
+</section>
+
+</div></main>
+
+<script>
+(() => {
+  const pages = ['quick', 'setup', 'scenarios', 'controls', 'problems', 'limits'];
+  function show() {
+    const id = pages.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'quick';
+    for (const p of pages) document.getElementById('p-' + p).hidden = p !== id;
+    for (const a of document.querySelectorAll('#tabs a')) {
+      if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    }
+  }
+  addEventListener('hashchange', () => { show(); scrollTo(0, 0) });
+  show();
+  for (const b of document.querySelectorAll('.copy')) b.onclick = async () => {
+    const el = document.getElementById(b.dataset.c);
+    try { await navigator.clipboard.writeText(el.textContent); b.textContent = 'Copied' }
+    catch { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = 'Selected' }
+    setTimeout(() => b.textContent = 'Copy', 1500);
+  };
+})();
+</script>
