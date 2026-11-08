@@ -1,6 +1,8 @@
 # Operation-GrizzlyGuard
 Group 15 - RS1 Operation GrizzlyGuard
 
+**Scenario guide:** open [`scenario_guide.html`](scenario_guide.html) in a web browser for setup steps, the scenario commands, GUI controls and troubleshooting. Download it or open it from your local copy of this folder, because GitHub shows HTML files as code.
+
 # GrizzlyGuard runbook
 
 How to build and run every node, in which terminals and in what order. Ends with the next integration steps for decision making and perception.
